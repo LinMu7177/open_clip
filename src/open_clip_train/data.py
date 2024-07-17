@@ -94,24 +94,67 @@ class CocoNutDataset(Dataset):
 
         plt.show()
 
+    import numpy as np
+    from PIL import Image
+
+    def crop_img_by_segment(self, segment, image_np, panoptic_seg):
+        mask = (panoptic_seg == segment['id'])
+        if not np.any(mask):
+            raise ValueError("指定的 segment 在分割掩码中不存在。")
+
+        # 检查图像是否为灰度图
+        grayscale_image = image_np.ndim == 2
+
+        if grayscale_image:
+            image_np = np.expand_dims(image_np, axis=2)
+
+        # 找到掩码的边界框
+        coords = np.argwhere(mask)
+        y_min, x_min = coords.min(axis=0)
+        y_max, x_max = coords.max(axis=0)
+        cropped_image = image_np[y_min:y_max + 1, x_min:x_max + 1]
+
+        # 如果是灰度图，移除扩展的维度
+        if grayscale_image:
+            cropped_image = np.squeeze(cropped_image, axis=2)
+
+        # 将裁剪后的图像转换为 PIL 格式
+        cropped_image_pil = Image.fromarray(cropped_image.astype(np.uint8))
+
+        return cropped_image_pil
+
     def get_captions_for_image(self, image_name, df):
         name, _ = os.path.splitext(image_name)
         return df[df['image_id'] == int(name)]['caption'].tolist()
 
     def __getitem__(self, idx):
         captions = self.get_captions_for_image(str(self.images[idx]), self.coco_df)
-        images = self.transforms(Image.open(self.images_path + str(self.images[idx]).replace('png','jpg')))
-        image_panoptic_path = self.panoptic_path + str(self.images[idx])
+        images = Image.open(self.images_path + str(self.images[idx]).replace('png', 'jpg'))
+        image_np = np.array(images)
+
+        images = self.transforms(images)
+        texts = self.tokenize([str(captions[0])])[0]
 
         # load panoptic mask
+
+        image_panoptic_path = self.panoptic_path + str(self.images[idx])
         panoptic_orig = np.asarray(Image.open(image_panoptic_path), dtype=np.uint32)
         panoptic_seg = rgb2id(panoptic_orig).astype(np.int32)
 
         # self.visualize_segment_by_id(Image.open(self.images_path + str(self.images[idx]).replace('png','jpg')), panoptic_seg, 4)
 
-        texts = self.tokenize([str(captions[0])])[0]
-        # return texts, images, panoptic_seg
-        return images, texts
+        object_imgs, object_captions = [], []
+        for segment in self.segments_df.loc[idx]['segments_info']:
+            if len(object_captions) == 3:
+                break
+            if segment['caption']:
+                object_captions.append(segment['caption'])
+                object_img = self.crop_img_by_segment(segment, image_np, panoptic_seg)
+                object_imgs.append(self.transforms(object_img))
+
+        object_captions = self.tokenize(object_captions)
+        # return images, texts, panoptic_seg
+        return images, texts, object_imgs, object_captions
 
 class SharedEpoch:
     def __init__(self, epoch: int = 0):

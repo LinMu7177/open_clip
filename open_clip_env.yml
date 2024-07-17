@@ -1,4 +1,4 @@
-name: open_clip
+name: open_clip_dev
 channels:
   - defaults
 dependencies:
