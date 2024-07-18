@@ -262,9 +262,9 @@ class CLIP(nn.Module):
         self.visual.set_grad_checkpointing(enable)
         self.transformer.grad_checkpointing = enable
 
-    def encode_image(self, image, normalize: bool = False):
-        features = self.visual(image)
-        return F.normalize(features, dim=-1) if normalize else features
+    def encode_image(self, image, object_boxes=None, masks=None, normalize: bool = False):
+        features, object_features = self.visual(image, object_boxes, masks)
+        return F.normalize(features, dim=-1) if normalize else features, F.normalize(object_features, dim=-1) if normalize else object_features
 
     def encode_text(self, text, normalize: bool = False):
         cast_dtype = self.transformer.get_cast_dtype()
@@ -296,9 +296,14 @@ class CLIP(nn.Module):
             self,
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
+            object_boxes: Optional[torch.Tensor] = None,
+            object_captions: Optional[torch.Tensor] = None,
+            masks: Optional[torch.Tensor] = None,
     ):
-        image_features = self.encode_image(image, normalize=True) if image is not None else None
+        image_features, object_features = self.encode_image(image, object_boxes, masks, normalize=True) if image is not None else None
         text_features = self.encode_text(text, normalize=True) if text is not None else None
+        valid_captions = object_captions[masks]
+        object_text_features = self.encode_text(valid_captions, normalize=True) if text is not None else None
 
         if self.output_dict:
             out_dict = {
@@ -306,9 +311,15 @@ class CLIP(nn.Module):
                 "text_features": text_features,
                 "logit_scale": self.logit_scale.exp()
             }
+            object_out_dict = {
+                "image_features": object_features,
+                "text_features": object_text_features,
+                "logit_scale": self.logit_scale.exp()
+            }
             if self.logit_bias is not None:
                 out_dict['logit_bias'] = self.logit_bias
-            return out_dict
+                object_out_dict['logit_bias'] = self.logit_bias
+            return out_dict, object_out_dict
 
         if self.logit_bias is not None:
             return image_features, text_features, self.logit_scale.exp(), self.logit_bias

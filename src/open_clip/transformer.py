@@ -7,6 +7,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
+from torchvision.ops import roi_align
 
 from .utils import to_2tuple
 from .pos_embed import get_2d_sincos_pos_embed
@@ -605,7 +606,8 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, object_boxes: torch.Tensor, masks: torch.Tensor):
+        input_shape = x.shape # (4, 3, 224, 224)
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -617,7 +619,26 @@ class VisionTransformer(nn.Module):
 
         x = self.patch_dropout(x)
         x = self.ln_pre(x)
-        x = self.transformer(x)
+        x = self.transformer(x) # (4, 50, 768)
+
+
+        batch_size, dim =x.shape[0], x.shape[-1]
+        num_objects = object_boxes.shape[1]
+
+        x_2d = x[:, 1:, :].reshape(-1, *self.grid_size, dim) # [4, 7, 7, 768]
+        x_2d = x_2d.permute(0, 3, 1, 2)  # [4, 768, 7, 7]
+
+        batch_indices = torch.arange(batch_size, device=object_boxes.device).view(-1, 1).expand(-1, num_objects).reshape(-1)
+        valid_batch_indices = batch_indices[masks.reshape(-1)]
+        valid_boxes = object_boxes[masks]
+        rois = torch.cat([valid_batch_indices.view(-1, 1).to(object_boxes.dtype), valid_boxes], dim=1)
+        object_features = roi_align(x_2d,
+                                    boxes=rois,
+                                    output_size=(5, 5),
+                                    spatial_scale= self.grid_size[-1] / input_shape[-1])
+        object_features = torch.mean(object_features, dim=(2, 3))
+        object_features = object_features @ self.proj
+
 
         if self.attn_pool is not None:
             if self.attn_pool_contrastive is not None:
@@ -646,8 +667,7 @@ class VisionTransformer(nn.Module):
 
         if self.output_tokens:
             return pooled, tokens
-        
-        return pooled
+        return pooled, object_features
 
 
 def text_global_pool(x, text: Optional[torch.Tensor] = None, pool_type: str = 'argmax'):

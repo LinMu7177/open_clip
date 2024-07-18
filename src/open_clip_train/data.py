@@ -1,4 +1,5 @@
 import ast
+import copy
 import json
 import logging
 import random
@@ -6,6 +7,8 @@ import math
 import os
 import random
 import sys
+from collections import defaultdict
+
 import braceexpand
 from dataclasses import dataclass
 from multiprocessing import Value
@@ -155,6 +158,64 @@ class CocoNutDataset(Dataset):
         object_captions = self.tokenize(object_captions)
         # return images, texts, panoptic_seg
         return images, texts, object_imgs, object_captions
+
+
+class CocoFormatDataset(Dataset):
+    def __init__(self, input_filename, transforms, images_path, tokenizer=None):
+        logging.debug(f'Loading json data from {input_filename}.')
+        with open(input_filename) as f:
+            coco = json.load(f)
+        self.images = coco['images']
+        self.annotations = defaultdict(list)
+        self.categories = {}
+        for ann in coco['annotations']:
+            self.annotations[ann['image_id']].append(ann)
+        for cat in coco['categories']:
+            self.categories[cat['id']] = cat
+
+        self.images_path = images_path
+        self.transforms = transforms
+        logging.debug('Done loading data.')
+
+        self.tokenize = tokenizer
+        self.max_object_per_image = 10
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        caption = 'image level caption placeholder'
+        image_id = self.images[idx]['id']
+        image = Image.open(os.path.join(self.images_path, self.images[idx]['file_name']))
+        width, height = image.width, image.height
+
+        image = self.transforms(image)
+        scale_x, scale_y = image.shape[2] / width, image.shape[1] / height
+
+        texts = self.tokenize([str(caption)])[0]
+
+        object_boxes= np.zeros((self.max_object_per_image, 4), dtype=np.float32)
+        object_captions = [''] * self.max_object_per_image
+        masks = np.zeros((self.max_object_per_image, ), dtype=bool)
+        anns = copy.deepcopy(self.annotations[image_id])
+        random.shuffle(anns)
+        for ann_idx, ann in enumerate(anns[:self.max_object_per_image]):
+            bbox = np.array(ann['bbox'], dtype=np.float32)
+            bbox[2:] += bbox[:2]  # xywh ->xyxy
+            bbox[0::2] *= scale_x
+            bbox[1::2] *= scale_y
+
+            if 'caption' in ann:
+                caption = ann['caption']
+            else:
+                caption = self.categories[ann['category_id']]['name']
+            object_boxes[ann_idx] = bbox
+            object_captions[ann_idx] = caption
+            masks[ann_idx] = True
+
+        object_captions = self.tokenize(object_captions)
+        return image, texts, object_boxes, object_captions, masks
+
 
 class SharedEpoch:
     def __init__(self, epoch: int = 0):
@@ -617,6 +678,34 @@ def get_coconut_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None):
 
     return DataInfo(dataloader, sampler)
 
+def get_coco_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None):
+    input_filename = args.train_data if is_train else args.val_data
+    assert input_filename
+    dataset = CocoFormatDataset(
+        input_filename,
+        preprocess_fn,
+        images_path=args.img_path,
+        tokenizer=tokenizer
+    )
+
+    num_samples = len(dataset)
+    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
+    shuffle = is_train and sampler is None
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=shuffle,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=sampler,
+        drop_last=is_train,
+    )
+    dataloader.num_samples = num_samples
+    dataloader.num_batches = len(dataloader)
+
+    return DataInfo(dataloader, sampler)
+
 class SyntheticDataset(Dataset):
 
     def __init__(
@@ -674,6 +763,8 @@ def get_dataset_fn(data_path, dataset_type):
         return get_csv_dataset
     elif dataset_type == "coconut":
         return get_coconut_dataset
+    elif dataset_type == "coco":
+        return get_coco_dataset
     elif dataset_type == "synthetic":
         return get_synthetic_dataset
     elif dataset_type == "auto":

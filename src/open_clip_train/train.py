@@ -89,26 +89,30 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         if not args.skip_scheduler:
             scheduler(step)
 
-        images, texts, object_imgs, object_captions = batch
+        images, texts, object_boxes, object_captions, masks = batch
         images = images.to(device=device, dtype=input_dtype, non_blocking=True)
         texts = texts.to(device=device, non_blocking=True)
+        object_boxes = object_boxes.to(device=device, non_blocking=True)
+        object_captions = object_captions.to(device=device, non_blocking=True)
+        masks = masks.to(device=device, non_blocking=True)
 
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
             with autocast():
-                model_out = model(images, texts)
+                model_out, object_out = model(images, texts, object_boxes, object_captions, masks)
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
                         dist_model_out = dist_model(images, texts)
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
                 losses = loss(**model_out, output_dict=True)
+                object_losses = loss(**object_out, output_dict=True)
+                losses.update({f'obj_{k}': v for k, v in object_losses.items()})
 
                 total_loss = sum(losses.values())
                 losses["loss"] = total_loss
-
             backward(total_loss, scaler)
         else:
             # First, cache the features without any gradient tracking.
