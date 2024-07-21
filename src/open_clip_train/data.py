@@ -165,13 +165,18 @@ class CocoFormatDataset(Dataset):
         logging.debug(f'Loading json data from {input_filename}.')
         with open(input_filename) as f:
             coco = json.load(f)
-        self.images = coco['images']
         self.annotations = defaultdict(list)
-        self.categories = {}
         for ann in coco['annotations']:
             self.annotations[ann['image_id']].append(ann)
+
+        self.categories = {}
         for cat in coco['categories']:
             self.categories[cat['id']] = cat
+
+        self.images = []
+        for image_info in coco['images']:
+            if image_info['id'] in self.annotations:
+                self.images.append(image_info)
 
         self.images_path = images_path
         self.transforms = transforms
@@ -184,13 +189,23 @@ class CocoFormatDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, idx):
-        caption = 'image level caption placeholder'
-        image_id = self.images[idx]['id']
-        image = Image.open(os.path.join(self.images_path, self.images[idx]['file_name']))
+        image_info = self.images[idx]
+        image_id = image_info['id']
+        
+        image = Image.open(os.path.join(self.images_path, image_info['file_name']))
         width, height = image.width, image.height
 
         image = self.transforms(image)
         scale_x, scale_y = image.shape[2] / width, image.shape[1] / height
+
+        if 'caption' in image_info:
+            caption = image_info['caption']
+        elif 'captions' in image_info:
+            caption = random.choice(image_info['captions'])
+        else:
+            caption = 'image caption placeholder'
+            print("No image caption available")
+            quit()
 
         texts = self.tokenize([str(caption)])[0]
 
@@ -205,14 +220,15 @@ class CocoFormatDataset(Dataset):
             bbox[0::2] *= scale_x
             bbox[1::2] *= scale_y
 
-            if 'caption' in ann:
+            if 'caption' in ann and ann['caption']:
                 caption = ann['caption']
+            elif 'object_caption' in ann and ann['object_caption']:
+                caption = ann['object_caption']
             else:
                 caption = self.categories[ann['category_id']]['name']
             object_boxes[ann_idx] = bbox
             object_captions[ann_idx] = caption
             masks[ann_idx] = True
-
         object_captions = self.tokenize(object_captions)
         return image, texts, object_boxes, object_captions, masks
 
