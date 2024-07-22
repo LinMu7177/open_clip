@@ -58,108 +58,6 @@ class CsvDataset(Dataset):
             texts = self.tokenize([str(self.captions[idx])])[0]
         return images, texts
 
-
-class CocoNutDataset(Dataset):
-    def __init__(self, input_filename, transforms, images_path, coconut_path, panoptic_path, tokenizer=None):
-        logging.debug(f'Loading json data from {input_filename}.')
-        coco = json.load(open(input_filename, 'r'))
-        self.coco_df = pd.DataFrame(coco['annotations'])
-
-        coconut = json.load(open(coconut_path, 'r'))
-        self.categories_df = pd.json_normalize(coconut, 'categories')
-        self.segments_df = pd.json_normalize(coconut, 'annotations')
-
-        self.images_path = images_path
-        self.panoptic_path = panoptic_path
-        self.images = self.segments_df["file_name"].tolist()
-        self.transforms = transforms
-        logging.debug('Done loading data.')
-
-        self.tokenize = tokenizer
-
-    def __len__(self):
-        return len(self.images)
-
-    def visualize_segment_by_id(self, image, panoptic_seg, segment_id):
-        mask = panoptic_seg == segment_id
-
-        plt.figure(figsize=(10, 10))
-        plt.subplot(1, 2, 1)
-        plt.imshow(image)
-        plt.title("Original Image")
-        plt.axis('off')
-
-        masked_image = np.array(image) * np.expand_dims(mask, axis=2)
-        plt.subplot(1, 2, 2)
-        plt.imshow(masked_image)
-        plt.title(f"Segment ID: {segment_id}")
-        plt.axis('off')
-
-        plt.show()
-
-    import numpy as np
-    from PIL import Image
-
-    def crop_img_by_segment(self, segment, image_np, panoptic_seg):
-        mask = (panoptic_seg == segment['id'])
-        if not np.any(mask):
-            raise ValueError("指定的 segment 在分割掩码中不存在。")
-
-        # 检查图像是否为灰度图
-        grayscale_image = image_np.ndim == 2
-
-        if grayscale_image:
-            image_np = np.expand_dims(image_np, axis=2)
-
-        # 找到掩码的边界框
-        coords = np.argwhere(mask)
-        y_min, x_min = coords.min(axis=0)
-        y_max, x_max = coords.max(axis=0)
-        cropped_image = image_np[y_min:y_max + 1, x_min:x_max + 1]
-
-        # 如果是灰度图，移除扩展的维度
-        if grayscale_image:
-            cropped_image = np.squeeze(cropped_image, axis=2)
-
-        # 将裁剪后的图像转换为 PIL 格式
-        cropped_image_pil = Image.fromarray(cropped_image.astype(np.uint8))
-
-        return cropped_image_pil
-
-    def get_captions_for_image(self, image_name, df):
-        name, _ = os.path.splitext(image_name)
-        return df[df['image_id'] == int(name)]['caption'].tolist()
-
-    def __getitem__(self, idx):
-        captions = self.get_captions_for_image(str(self.images[idx]), self.coco_df)
-        images = Image.open(self.images_path + str(self.images[idx]).replace('png', 'jpg'))
-        image_np = np.array(images)
-
-        images = self.transforms(images)
-        texts = self.tokenize([str(captions[0])])[0]
-
-        # load panoptic mask
-
-        image_panoptic_path = self.panoptic_path + str(self.images[idx])
-        panoptic_orig = np.asarray(Image.open(image_panoptic_path), dtype=np.uint32)
-        panoptic_seg = rgb2id(panoptic_orig).astype(np.int32)
-
-        # self.visualize_segment_by_id(Image.open(self.images_path + str(self.images[idx]).replace('png','jpg')), panoptic_seg, 4)
-
-        object_imgs, object_captions = [], []
-        for segment in self.segments_df.loc[idx]['segments_info']:
-            if len(object_captions) == 3:
-                break
-            if segment['caption']:
-                object_captions.append(segment['caption'])
-                object_img = self.crop_img_by_segment(segment, image_np, panoptic_seg)
-                object_imgs.append(self.transforms(object_img))
-
-        object_captions = self.tokenize(object_captions)
-        # return images, texts, panoptic_seg
-        return images, texts, object_imgs, object_captions
-
-
 class CocoFormatDataset(Dataset):
     def __init__(self, input_filename, transforms, images_path, tokenizer=None):
         logging.debug(f'Loading json data from {input_filename}.')
@@ -665,35 +563,6 @@ def get_csv_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None):
 
     return DataInfo(dataloader, sampler)
 
-def get_coconut_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None):
-    input_filename = args.train_data if is_train else args.val_data
-    assert input_filename
-    dataset = CocoNutDataset(
-        input_filename,
-        preprocess_fn,
-        images_path=args.img_path,
-        coconut_path=args.coconut_path,
-        panoptic_path=args.panoptic_path,
-        tokenizer=tokenizer
-    )
-    num_samples = len(dataset)
-    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
-    shuffle = is_train and sampler is None
-
-    dataloader = DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=shuffle,
-        num_workers=args.workers,
-        pin_memory=True,
-        sampler=sampler,
-        drop_last=is_train,
-    )
-    dataloader.num_samples = num_samples
-    dataloader.num_batches = len(dataloader)
-
-    return DataInfo(dataloader, sampler)
-
 def get_coco_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None):
     input_filename = args.train_data if is_train else args.val_data
     assert input_filename
@@ -777,8 +646,6 @@ def get_dataset_fn(data_path, dataset_type):
         return get_wds_dataset
     elif dataset_type == "csv":
         return get_csv_dataset
-    elif dataset_type == "coconut":
-        return get_coconut_dataset
     elif dataset_type == "coco":
         return get_coco_dataset
     elif dataset_type == "synthetic":
