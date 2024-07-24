@@ -237,6 +237,9 @@ class CLIP(nn.Module):
         self.visual = _build_vision_tower(embed_dim, vision_cfg, quick_gelu, cast_dtype)
 
         text = _build_text_tower(embed_dim, text_cfg, quick_gelu, cast_dtype)
+        for param in text.parameters():
+            param.requires_grad = False
+        
         self.transformer = text.transformer
         self.context_length = text.context_length
         self.vocab_size = text.vocab_size
@@ -257,14 +260,21 @@ class CLIP(nn.Module):
         # lock image tower as per LiT - https://arxiv.org/abs/2111.07991
         self.visual.lock(unlocked_groups=unlocked_groups, freeze_bn_stats=freeze_bn_stats)
 
+    def lock_text_tower(self, *args, **kwargs):
+        pass
+
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
         self.visual.set_grad_checkpointing(enable)
         self.transformer.grad_checkpointing = enable
 
-    def encode_image(self, image, object_boxes=None, masks=None, normalize: bool = False):
+    def encode_image(self, image, object_boxes=None, masks=None, normalize: bool = False, return_object_features: bool = False):
         features, object_features = self.visual(image, object_boxes, masks)
-        return F.normalize(features, dim=-1) if normalize else features, F.normalize(object_features, dim=-1) if normalize else object_features
+        features = F.normalize(features, dim=-1) if normalize else features
+        if return_object_features:
+            object_features = F.normalize(object_features, dim=-1) if object_features is not None and normalize else object_features
+            return features, object_features
+        return features
 
     def encode_text(self, text, normalize: bool = False):
         cast_dtype = self.transformer.get_cast_dtype()
@@ -300,10 +310,11 @@ class CLIP(nn.Module):
             object_captions: Optional[torch.Tensor] = None,
             masks: Optional[torch.Tensor] = None,
     ):
-        image_features, object_features = self.encode_image(image, object_boxes, masks, normalize=True) if image is not None else None
+        image_features, object_features = self.encode_image(image, object_boxes, masks, normalize=True, return_object_features=True) if image is not None else None
         text_features = self.encode_text(text, normalize=True) if text is not None else None
-        valid_captions = object_captions[masks]
-        object_text_features = self.encode_text(valid_captions, normalize=True) if text is not None else None
+        if object_captions is not None:
+            valid_captions = object_captions[masks]
+            object_text_features = self.encode_text(valid_captions, normalize=True) if text is not None else None
 
         if self.output_dict:
             out_dict = {
@@ -311,15 +322,17 @@ class CLIP(nn.Module):
                 "text_features": text_features,
                 "logit_scale": self.logit_scale.exp()
             }
-            object_out_dict = {
-                "image_features": object_features,
-                "text_features": object_text_features,
-                "logit_scale": self.logit_scale.exp()
-            }
+            if object_captions is not None:
+                out_dict.update({
+                    "object_features": object_features,
+                    "object_text_features": object_text_features
+                })
             if self.logit_bias is not None:
                 out_dict['logit_bias'] = self.logit_bias
-                object_out_dict['logit_bias'] = self.logit_bias
-            return out_dict, object_out_dict
+                if object_captions is not None:
+                    object_out_dict['logit_bias'] = self.logit_bias
+
+            return out_dict
 
         if self.logit_bias is not None:
             return image_features, text_features, self.logit_scale.exp(), self.logit_bias

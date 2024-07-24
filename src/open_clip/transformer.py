@@ -355,7 +355,7 @@ class Transformer(nn.Module):
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
         if not self.batch_first:
-            x = x.transpose(0, 1).contiguous()    # NLD -> LND
+            x = x.transpose(0, 1).contiguous()  # NLD -> LND
         for r in self.resblocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
@@ -363,12 +363,13 @@ class Transformer(nn.Module):
             else:
                 x = r(x, attn_mask=attn_mask)
         if not self.batch_first:
-            x = x.transpose(0, 1)    # LND -> NLD
+            x = x.transpose(0, 1)  # LND -> NLD
         return x
 
 
 class CustomTransformer(nn.Module):
     """ A custom transformer that can use different block types. """
+
     def __init__(
             self,
             width: int,
@@ -476,7 +477,7 @@ class VisionTransformer(nn.Module):
                 scale * torch.randn(self.grid_size[0] * self.grid_size[1] + 1, width))
         elif pos_embed_type == 'sin_cos_2d':
             # fixed sin-cos embedding
-            assert self.grid_size[0] == self.grid_size[1],\
+            assert self.grid_size[0] == self.grid_size[1], \
                 'currently sin cos 2d pos embedding only supports square input'
             self.positional_embedding = nn.Parameter(
                 torch.zeros(self.grid_size[0] * self.grid_size[1] + 1, width), requires_grad=False)
@@ -606,8 +607,8 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def forward(self, x: torch.Tensor, object_boxes: torch.Tensor, masks: torch.Tensor):
-        input_shape = x.shape # (4, 3, 224, 224)
+    def forward(self, x: torch.Tensor, object_boxes: torch.Tensor = None, masks: torch.Tensor = None):
+        input_shape = x.shape  # (4, 3, 224, 224)
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -619,26 +620,28 @@ class VisionTransformer(nn.Module):
 
         x = self.patch_dropout(x)
         x = self.ln_pre(x)
-        x = self.transformer(x) # (4, 50, 768)
+        x = self.transformer(x)  # (4, 50, 768)
 
+        object_features = None
+        if object_boxes is not None:
+            batch_size, dim = x.shape[0], x.shape[-1]
+            num_objects = object_boxes.shape[1]
 
-        batch_size, dim =x.shape[0], x.shape[-1]
-        num_objects = object_boxes.shape[1]
+            x_2d = x[:, 1:, :].reshape(-1, *self.grid_size, dim)  # [4, 7, 7, 768]
+            x_2d = x_2d.permute(0, 3, 1, 2)  # [4, 768, 7, 7]
 
-        x_2d = x[:, 1:, :].reshape(-1, *self.grid_size, dim) # [4, 7, 7, 768]
-        x_2d = x_2d.permute(0, 3, 1, 2)  # [4, 768, 7, 7]
-
-        batch_indices = torch.arange(batch_size, device=object_boxes.device).view(-1, 1).expand(-1, num_objects).reshape(-1)
-        valid_batch_indices = batch_indices[masks.reshape(-1)]
-        valid_boxes = object_boxes[masks]
-        rois = torch.cat([valid_batch_indices.view(-1, 1).to(object_boxes.dtype), valid_boxes], dim=1)
-        object_features = roi_align(x_2d,
-                                    boxes=rois,
-                                    output_size=(5, 5),
-                                    spatial_scale= self.grid_size[-1] / input_shape[-1])
-        object_features = torch.mean(object_features, dim=(2, 3))
-        object_features = object_features @ self.proj
-
+            batch_indices = torch.arange(batch_size, device=object_boxes.device).view(-1, 1).expand(-1,
+                                                                                                    num_objects).reshape(
+                -1)
+            valid_batch_indices = batch_indices[masks.reshape(-1)]
+            valid_boxes = object_boxes[masks]
+            rois = torch.cat([valid_batch_indices.view(-1, 1).to(object_boxes.dtype), valid_boxes], dim=1)
+            object_features = roi_align(x_2d,
+                                        boxes=rois,
+                                        output_size=(5, 5),
+                                        spatial_scale=self.grid_size[-1] / input_shape[-1])
+            object_features = torch.mean(object_features, dim=(2, 3))
+            object_features = object_features @ self.proj
 
         if self.attn_pool is not None:
             if self.attn_pool_contrastive is not None:
@@ -666,7 +669,7 @@ class VisionTransformer(nn.Module):
             pooled = pooled @ self.proj
 
         if self.output_tokens:
-            return pooled, tokens
+            return pooled, object_features, tokens
         return pooled, object_features
 
 

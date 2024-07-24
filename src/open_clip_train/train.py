@@ -8,6 +8,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.nn.parallel.distributed import DistributedDataParallel
+import torch.distributed as dist
+
 
 try:
     import wandb
@@ -61,6 +63,30 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
+def get_min_features_count(features):
+    local_count = torch.tensor([features.size(0)], dtype=torch.long, device=features.device)
+    dist.all_reduce(local_count, op=dist.ReduceOp.MIN)
+    return local_count.item()
+
+
+def random_select_features(features, text_features, count):
+    if features.size(0) <= count:
+        return features, text_features
+
+    indices = torch.randperm(features.size(0), device=features.device)[:count]
+    return features[indices], text_features[indices]
+
+
+# 在损失计算之前使用这个函数
+def prepare_features_for_loss(object_features, object_text_features):
+    min_count = get_min_features_count(object_features)
+
+    selected_object_features, selected_object_text_features = random_select_features(
+        object_features, object_text_features, min_count
+    )
+
+    return selected_object_features, selected_object_text_features
+
 def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
@@ -101,18 +127,26 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
         if args.accum_freq == 1:
             with autocast():
-                model_out, object_out = model(images, texts, object_boxes, object_captions, masks)
+                model_out = model(images, texts, object_boxes, object_captions, masks)
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
                         dist_model_out = dist_model(images, texts)
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
-                losses = loss(**model_out, output_dict=True)
-                object_losses = loss(**object_out, output_dict=True)
+                losses = loss(image_features=model_out['image_features'],
+                              text_features=model_out['text_features'],
+                              logit_scale=model_out['logit_scale'],
+                              output_dict=True)
+                model_out['object_features'], model_out['object_text_features'] = prepare_features_for_loss(model_out['object_features'], model_out['object_text_features'])
+                object_losses = loss(image_features=model_out['object_features'],
+                                     text_features=model_out['object_text_features'],
+                                     logit_scale=model_out['logit_scale'],
+                                     output_dict=True)
                 losses.update({f'obj_{k}': v for k, v in object_losses.items()})
 
                 total_loss = sum(losses.values())
                 losses["loss"] = total_loss
+            dist.barrier()
             backward(total_loss, scaler)
         else:
             # First, cache the features without any gradient tracking.
