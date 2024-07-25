@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 from torch.nn.parallel.distributed import DistributedDataParallel
 import torch.distributed as dist
+from open_clip_train.distributed import is_using_distributed
 
 
 try:
@@ -108,6 +109,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
     end = time.time()
+    is_distributed = is_using_distributed()
     for i, batch in enumerate(dataloader):
         i_accum = i // args.accum_freq
         step = num_batches_per_epoch * epoch + i_accum
@@ -137,7 +139,8 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                               text_features=model_out['text_features'],
                               logit_scale=model_out['logit_scale'],
                               output_dict=True)
-                model_out['object_features'], model_out['object_text_features'] = prepare_features_for_loss(model_out['object_features'], model_out['object_text_features'])
+                if is_distributed:
+                    model_out['object_features'], model_out['object_text_features'] = prepare_features_for_loss(model_out['object_features'], model_out['object_text_features'])
                 object_losses = loss(image_features=model_out['object_features'],
                                      text_features=model_out['object_text_features'],
                                      logit_scale=model_out['logit_scale'],
@@ -146,7 +149,6 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
                 total_loss = sum(losses.values())
                 losses["loss"] = total_loss
-            dist.barrier()
             backward(total_loss, scaler)
         else:
             # First, cache the features without any gradient tracking.
