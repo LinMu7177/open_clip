@@ -9,6 +9,7 @@ import braceexpand
 from dataclasses import dataclass
 from multiprocessing import Value
 
+import copy
 import numpy as np
 import pandas as pd
 import torch
@@ -20,11 +21,26 @@ from torch.utils.data.distributed import DistributedSampler
 from webdataset.filters import _shuffle
 from webdataset.tariterators import base_plus_ext, url_opener, tar_file_expander, valid_sample
 
+import pickle
+import pycocotools.mask as mask_util
+
+from torchvision.transforms.functional import InterpolationMode
+from torchvision.transforms.transforms import JointRandomResizedCrop
+
 try:
     import horovod.torch as hvd
 except ImportError:
     hvd = None
 
+join_preprocess = JointRandomResizedCrop(
+        size=(224, 224),
+        scale=(0.9, 1.0),
+        ratio=(0.75, 1.3333),
+        interpolation=InterpolationMode.BILINEAR,
+        antialias=True,
+        mask_interpolation=InterpolationMode.NEAREST,
+        mask_antialias=False
+    )
 
 class CsvDataset(Dataset):
     def __init__(self, input_filename, transforms, img_key, caption_key, sep="\t", tokenizer=None):
@@ -324,6 +340,22 @@ class ResampledShards2(IterableDataset):
             else:
                 yield dict(url=self.rng.choices(self.urls, weights=self.weights, k=1)[0])
 
+def load_edges(edges_demo_path, image_shape):
+    if os.path.exists(edges_demo_path):
+        with open(edges_demo_path, 'rb') as f:
+            combined_edges = pickle.load(f)
+        rle = {'size': combined_edges['size'], 'counts': combined_edges['counts']}
+        mask = mask_util.decode(rle)
+        return mask
+    else:
+        return np.ones(image_shape[:2], dtype=np.uint8)
+
+def get_objects_sense(key, image, objects_sense_format, objects_data):
+    if objects_sense_format == 'edges':
+        objects_sense_path = os.path.join(objects_data, key + '_edges.pkl')
+        edges = load_edges(objects_sense_path,image.size)
+    edges = torch.as_tensor(edges).unsqueeze(0).half()
+    return edges
 
 def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None):
     input_shards = args.train_data if is_train else args.val_data
@@ -386,14 +418,47 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
             # at this point, we have an iterator over the shards assigned to each worker
             wds.tarfile_to_samples(handler=log_and_continue),
         ])
-    pipeline.extend([
-        wds.select(filter_no_caption_or_no_image),
-        wds.decode("pilrgb", handler=log_and_continue),
-        wds.rename(image="jpg;png;jpeg;webp", text="txt"),
-        wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-        wds.to_tuple("image", "text"),
-        wds.batched(args.batch_size, partial=not is_train)
-    ])
+
+
+    if args.objects_sense_format:
+        if is_train:
+            preprocess_img.transforms = preprocess_img.transforms[1:]
+
+            pipeline.extend([
+                wds.select(filter_no_caption_or_no_image),
+                wds.decode("pilrgb", handler=log_and_continue),
+                wds.rename(key="__key__",image="jpg;png;jpeg;webp", text="txt"),
+                wds.map(lambda sample: {**sample, 'objects_sense':
+                    get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
+                # Apply the same random cropping to the image and objects sense
+                wds.map(join_preprocess),
+                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
+                wds.to_tuple("image", "text", "objects_sense"),
+                wds.batched(args.batch_size, partial=not is_train)
+            ])
+        else:
+            preprocess_objects_val = copy.deepcopy(preprocess_img)
+            preprocess_objects_val.transforms = preprocess_objects_val.transforms[:2]
+            pipeline.extend([
+                wds.select(filter_no_caption_or_no_image),
+                wds.decode("pilrgb", handler=log_and_continue),
+                wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
+                wds.map(lambda sample: {**sample, 'objects_sense':
+                    get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
+                # Apply the same random cropping to the image and objects sense
+                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0], objects_sense=preprocess_objects_val),
+                wds.to_tuple("image", "text", "objects_sense"),
+                wds.batched(args.batch_size, partial=not is_train)
+            ])
+    else:
+        pipeline.extend([
+            wds.select(filter_no_caption_or_no_image),
+            wds.decode("pilrgb", handler=log_and_continue),
+            wds.rename(objects_sense="__key__", image="jpg;png;jpeg;webp", text="txt"),
+            wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
+            wds.to_tuple("image", "text", "objects_sense"),
+            wds.batched(args.batch_size, partial=not is_train)
+        ])
 
     dataset = wds.DataPipeline(*pipeline)
 

@@ -275,8 +275,8 @@ class CLIP(nn.Module):
                 no_wd.add('visual.' + n)
         return no_wd
 
-    def encode_image(self, image, normalize: bool = False):
-        features = self.visual(image)
+    def encode_image(self, image, object_sense=None, normalize: bool = False):
+        features = self.visual(image, object_sense)
         return F.normalize(features, dim=-1) if normalize else features
 
     def encode_text(self, text, normalize: bool = False):
@@ -309,8 +309,12 @@ class CLIP(nn.Module):
             self,
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
+            objects_sense: Optional[torch.Tensor] = None,
     ):
-        image_features = self.encode_image(image, normalize=True) if image is not None else None
+        if objects_sense is not None and objects_sense.any():
+            image_features = self.encode_image(image, objects_sense, normalize=True) if image is not None else None
+        else:
+            image_features = self.encode_image(image, normalize=True) if image is not None else None
         text_features = self.encode_text(text, normalize=True) if text is not None else None
 
         if self.output_dict:

@@ -466,6 +466,7 @@ class VisionTransformer(nn.Module):
         self.output_dim = output_dim
 
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=width, kernel_size=patch_size, stride=patch_size, bias=False)
+        self.conv1_alpha = nn.Conv2d(in_channels=1, out_channels=width, kernel_size=patch_size, stride=patch_size, padding=0, bias=False)
 
         # class embeddings and positional embeddings
         scale = width ** -0.5
@@ -611,8 +612,11 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def forward(self, x: torch.Tensor):
-        x = self.conv1(x)  # shape = [*, width, grid, grid]
+    def forward(self, x: torch.Tensor, alpha=None):
+        if alpha is not None and alpha.any():
+            x = self.conv1(x) + self.conv1_alpha(alpha)
+        else:
+            x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
 

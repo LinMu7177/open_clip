@@ -95,6 +95,14 @@ def parse_args(args):
         default=None,
         help="Path to imagenet val set for conducting zero shot evaluation.",
     )
+
+    parser.add_argument(
+        "--imagenet-val-objects",
+        type=str,
+        default=None,
+        help="Path to imagenet val objects set for conducting zero shot evaluation.",
+    )
+
     parser.add_argument(
         "--imagenet-v2",
         type=str,
@@ -474,6 +482,20 @@ def parse_args(args):
         default=None,
         type=str,
         help='A string to specify a specific distributed loss implementation.'
+    )
+
+    parser.add_argument(
+        "--objects-sense-format",
+        type=str,
+        default=None,
+        help="Format of objects sense",
+    )
+
+    parser.add_argument(
+        "--objects-data",
+        type=str,
+        default=None,
+        help="Path to file(s) with objects data",
     )
 
     args = parser.parse_args(args)

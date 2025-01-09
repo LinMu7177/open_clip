@@ -3,6 +3,8 @@ import logging
 import math
 import os
 import time
+import pickle
+import pycocotools.mask as mask_util
 
 import numpy as np
 import torch
@@ -60,8 +62,7 @@ def backward(total_loss, scaler):
     else:
         total_loss.backward()
 
-
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, objects_sense_format, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision, device_type=device.type)
     input_dtype = get_input_dtype(args.precision)
@@ -89,7 +90,13 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         if not args.skip_scheduler:
             scheduler(step)
 
-        images, texts = batch
+        if args.objects_sense_format:
+            images, texts, objects_sense = batch
+            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+        else:
+            images, texts = batch
+            objects_sense = None
+
         images = images.to(device=device, dtype=input_dtype, non_blocking=True)
         texts = texts.to(device=device, non_blocking=True)
 
@@ -98,7 +105,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
         if args.accum_freq == 1:
             with autocast():
-                model_out = model(images, texts)
+                model_out = model(images, texts, objects_sense)
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
@@ -273,12 +280,17 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
         all_image_features, all_text_features = [], []
         with torch.inference_mode():
             for i, batch in enumerate(dataloader):
-                images, texts = batch
+                if args.objects_sense_format:
+                    images, texts, objects_sense = batch
+                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+                else:
+                    images, texts = batch
+                    objects_sense = None
                 images = images.to(device=device, dtype=input_dtype, non_blocking=True)
                 texts = texts.to(device=device, non_blocking=True)
 
                 with autocast():
-                    model_out = model(images, texts)
+                    model_out = model(images, texts, objects_sense)
                     image_features = model_out["image_features"]
                     text_features = model_out["text_features"]
                     logit_scale = model_out["logit_scale"]
