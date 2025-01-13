@@ -1,635 +1,0 @@
-2025-01-06,08:57:09 | INFO | Running with a single process. Device cuda.
-2025-01-06,08:57:09 | INFO | Loaded ViT-B-32 model config.
-2025-01-06,08:57:11 | INFO | Loading pretrained ViT-B-32 weights (/mnt/shared/models/open_clip/CLIP-ViT-B-32-laion2B-s34B-b79K/open_clip_pytorch_model.bin).
-2025-01-06,08:57:11 | INFO | Model:
-2025-01-06,08:57:11 | INFO | CLIP(
-  (visual): VisionTransformer(
-    (conv1): Conv2d(3, 768, kernel_size=(32, 32), stride=(32, 32), bias=False)
-    (patch_dropout): Identity()
-    (ln_pre): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-    (transformer): Transformer(
-      (resblocks): ModuleList(
-        (0-11): 12 x ResidualAttentionBlock(
-          (ln_1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (attn): MultiheadAttention(
-            (out_proj): NonDynamicallyQuantizableLinear(in_features=768, out_features=768, bias=True)
-          )
-          (ls_1): Identity()
-          (ln_2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (mlp): Sequential(
-            (c_fc): Linear(in_features=768, out_features=3072, bias=True)
-            (gelu): GELU(approximate='none')
-            (c_proj): Linear(in_features=3072, out_features=768, bias=True)
-          )
-          (ls_2): Identity()
-        )
-      )
-    )
-    (ln_post): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-  )
-  (transformer): Transformer(
-    (resblocks): ModuleList(
-      (0-11): 12 x ResidualAttentionBlock(
-        (ln_1): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
-        (attn): MultiheadAttention(
-          (out_proj): NonDynamicallyQuantizableLinear(in_features=512, out_features=512, bias=True)
-        )
-        (ls_1): Identity()
-        (ln_2): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
-        (mlp): Sequential(
-          (c_fc): Linear(in_features=512, out_features=2048, bias=True)
-          (gelu): GELU(approximate='none')
-          (c_proj): Linear(in_features=2048, out_features=512, bias=True)
-        )
-        (ls_2): Identity()
-      )
-    )
-  )
-  (token_embedding): Embedding(49408, 512)
-  (ln_final): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
-)
-2025-01-06,08:57:11 | INFO | Params:
-2025-01-06,08:57:11 | INFO |   accum_freq: 1
-2025-01-06,08:57:11 | INFO |   aug_cfg: {}
-2025-01-06,08:57:11 | INFO |   batch_size: 1600
-2025-01-06,08:57:11 | INFO |   beta1: 0.9
-2025-01-06,08:57:11 | INFO |   beta2: 0.98
-2025-01-06,08:57:11 | INFO |   cache_dir: None
-2025-01-06,08:57:11 | INFO |   checkpoint_path: ./logs/2025_01_06-08_57_09-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp/checkpoints
-2025-01-06,08:57:11 | INFO |   coca_caption_loss_weight: 2.0
-2025-01-06,08:57:11 | INFO |   coca_contrastive_loss_weight: 1.0
-2025-01-06,08:57:11 | INFO |   copy_codebase: False
-2025-01-06,08:57:11 | INFO |   csv_caption_key: title
-2025-01-06,08:57:11 | INFO |   csv_img_key: filepath
-2025-01-06,08:57:11 | INFO |   csv_separator: 	
-2025-01-06,08:57:11 | INFO |   dataset_resampled: False
-2025-01-06,08:57:11 | INFO |   dataset_type: webdataset
-2025-01-06,08:57:11 | INFO |   ddp_static_graph: False
-2025-01-06,08:57:11 | INFO |   debug: False
-2025-01-06,08:57:11 | INFO |   delete_previous_checkpoint: False
-2025-01-06,08:57:11 | INFO |   device: cuda
-2025-01-06,08:57:11 | INFO |   dist_backend: None
-2025-01-06,08:57:11 | INFO |   dist_url: None
-2025-01-06,08:57:11 | INFO |   distill: False
-2025-01-06,08:57:11 | INFO |   distill_model: None
-2025-01-06,08:57:11 | INFO |   distill_pretrained: None
-2025-01-06,08:57:11 | INFO |   distributed: False
-2025-01-06,08:57:11 | INFO |   epochs: 2
-2025-01-06,08:57:11 | INFO |   epochs_cooldown: None
-2025-01-06,08:57:11 | INFO |   eps: 1e-06
-2025-01-06,08:57:11 | INFO |   force_custom_text: False
-2025-01-06,08:57:11 | INFO |   force_image_size: None
-2025-01-06,08:57:11 | INFO |   force_patch_dropout: None
-2025-01-06,08:57:11 | INFO |   force_quick_gelu: False
-2025-01-06,08:57:11 | INFO |   gather_with_grad: False
-2025-01-06,08:57:11 | INFO |   grad_checkpointing: False
-2025-01-06,08:57:11 | INFO |   grad_clip_norm: None
-2025-01-06,08:57:11 | INFO |   horovod: False
-2025-01-06,08:57:11 | INFO |   image_interpolation: None
-2025-01-06,08:57:11 | INFO |   image_mean: None
-2025-01-06,08:57:11 | INFO |   image_resize_mode: None
-2025-01-06,08:57:11 | INFO |   image_std: None
-2025-01-06,08:57:11 | INFO |   imagenet_v2: None
-2025-01-06,08:57:11 | INFO |   imagenet_val: /mnt/shared/data/imagenet-1k/val
-2025-01-06,08:57:11 | INFO |   local_loss: False
-2025-01-06,08:57:11 | INFO |   local_rank: 0
-2025-01-06,08:57:11 | INFO |   lock_image: False
-2025-01-06,08:57:11 | INFO |   lock_image_freeze_bn_stats: False
-2025-01-06,08:57:11 | INFO |   lock_image_unlocked_groups: 0
-2025-01-06,08:57:11 | INFO |   lock_text: False
-2025-01-06,08:57:11 | INFO |   lock_text_freeze_layer_norm: False
-2025-01-06,08:57:11 | INFO |   lock_text_unlocked_layers: 0
-2025-01-06,08:57:11 | INFO |   log_every_n_steps: 100
-2025-01-06,08:57:11 | INFO |   log_level: 20
-2025-01-06,08:57:11 | INFO |   log_local: False
-2025-01-06,08:57:11 | INFO |   log_path: ./logs/2025_01_06-08_57_09-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp/out.log
-2025-01-06,08:57:11 | INFO |   logs: ./logs/
-2025-01-06,08:57:11 | INFO |   loss_dist_impl: None
-2025-01-06,08:57:11 | INFO |   lr: 1e-05
-2025-01-06,08:57:11 | INFO |   lr_cooldown_end: 0.0
-2025-01-06,08:57:11 | INFO |   lr_cooldown_power: 1.0
-2025-01-06,08:57:11 | INFO |   lr_scheduler: cosine
-2025-01-06,08:57:11 | INFO |   model: ViT-B-32
-2025-01-06,08:57:11 | INFO |   momentum: None
-2025-01-06,08:57:11 | INFO |   name: 2025_01_06-08_57_09-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp
-2025-01-06,08:57:11 | INFO |   no_set_device_rank: False
-2025-01-06,08:57:11 | INFO |   opt: adamw
-2025-01-06,08:57:11 | INFO |   precision: amp
-2025-01-06,08:57:11 | INFO |   pretrained: /mnt/shared/models/open_clip/CLIP-ViT-B-32-laion2B-s34B-b79K/open_clip_pytorch_model.bin
-2025-01-06,08:57:11 | INFO |   pretrained_image: False
-2025-01-06,08:57:11 | INFO |   rank: 0
-2025-01-06,08:57:11 | INFO |   remote_sync: None
-2025-01-06,08:57:11 | INFO |   remote_sync_frequency: 300
-2025-01-06,08:57:11 | INFO |   remote_sync_protocol: s3
-2025-01-06,08:57:11 | INFO |   report_to: tensorboard
-2025-01-06,08:57:11 | INFO |   resume: None
-2025-01-06,08:57:11 | INFO |   save_frequency: 1
-2025-01-06,08:57:11 | INFO |   save_most_recent: False
-2025-01-06,08:57:11 | INFO |   seed: 0
-2025-01-06,08:57:11 | INFO |   siglip: False
-2025-01-06,08:57:11 | INFO |   skip_scheduler: False
-2025-01-06,08:57:11 | INFO |   tensorboard: True
-2025-01-06,08:57:11 | INFO |   tensorboard_path: ./logs/2025_01_06-08_57_09-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp/tensorboard
-2025-01-06,08:57:11 | INFO |   torchcompile: False
-2025-01-06,08:57:11 | INFO |   torchscript: False
-2025-01-06,08:57:11 | INFO |   trace: False
-2025-01-06,08:57:11 | INFO |   train_data: /mnt/shared/data/cc3m/train/{00000..00300}.tar
-2025-01-06,08:57:11 | INFO |   train_data_upsampling_factors: None
-2025-01-06,08:57:11 | INFO |   train_num_samples: 6143238
-2025-01-06,08:57:11 | INFO |   use_bn_sync: False
-2025-01-06,08:57:11 | INFO |   use_bnb_linear: None
-2025-01-06,08:57:11 | INFO |   val_data: /mnt/shared/data/cc3m/train/{00324..00331}.tar
-2025-01-06,08:57:11 | INFO |   val_frequency: 1
-2025-01-06,08:57:11 | INFO |   val_num_samples: 120000
-2025-01-06,08:57:11 | INFO |   wandb: False
-2025-01-06,08:57:11 | INFO |   wandb_notes: 
-2025-01-06,08:57:11 | INFO |   wandb_project_name: open-clip
-2025-01-06,08:57:11 | INFO |   warmup: 10000
-2025-01-06,08:57:11 | INFO |   wd: 0.1
-2025-01-06,08:57:11 | INFO |   workers: 6
-2025-01-06,08:57:11 | INFO |   world_size: 1
-2025-01-06,08:57:11 | INFO |   zeroshot_frequency: 1
-2025-01-06,08:57:11 | INFO | Created AdamW (adamw) optimizer: lr: 1e-05, betas: (0.9, 0.98), eps: 1e-06, weight_decay: 0.1, amsgrad: False, foreach: None, maximize: False, capturable: False, differentiable: False, fused: None
-2025-01-06,08:57:11 | INFO | Start epoch 0
-2025-01-06,08:57:36 | INFO | Train Epoch: 0 [   1600/6144000 (0%)] Data (t): 19.773 Batch (t): 24.684, 64.8184/s, 64.8184/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.6390 (1.6390) Loss: 1.6390 (1.6390)
-2025-01-06,09:01:45 | INFO | Train Epoch: 0 [ 161600/6144000 (3%)] Data (t): 2.048 Batch (t): 2.491, 1999.52/s, 1999.52/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.4813 (1.5601) Loss: 1.4813 (1.5601)
-2025-01-06,09:06:04 | INFO | Train Epoch: 0 [ 321600/6144000 (5%)] Data (t): 2.146 Batch (t): 2.588, 1984.08/s, 1984.08/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.4146 (1.5116) Loss: 1.4146 (1.5116)
-2025-01-06,09:11:13 | INFO | Train Epoch: 0 [ 481600/6144000 (8%)] Data (t): 2.648 Batch (t): 3.090, 567.377/s, 567.377/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.1440 (1.4197) Loss: 1.1440 (1.4197)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (107736028 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (98392704 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,09:16:32 | INFO | Train Epoch: 0 [ 641600/6144000 (10%)] Data (t): 2.680 Batch (t): 3.188, 266.401/s, 266.401/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.0451 (1.3448) Loss: 1.0451 (1.3448)
-2025-01-06,09:21:43 | INFO | Train Epoch: 0 [ 801600/6144000 (13%)] Data (t): 2.523 Batch (t): 3.116, 1497.58/s, 1497.58/s/gpu LR: 0.000001 Logit Scale: 99.998 Contrastive_loss: 1.0786 (1.3004) Loss: 1.0786 (1.3004)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (149962000 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (125450100 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,09:27:07 | INFO | Train Epoch: 0 [ 961600/6144000 (16%)] Data (t): 2.572 Batch (t): 3.233, 615.561/s, 615.561/s/gpu LR: 0.000001 Logit Scale: 99.993 Contrastive_loss: 1.0539 (1.2652) Loss: 1.0539 (1.2652)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (93950400 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (91359576 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,09:32:18 | INFO | Train Epoch: 0 [1121600/6144000 (18%)] Data (t): 2.665 Batch (t): 3.116, 362.141/s, 362.141/s/gpu LR: 0.000001 Logit Scale: 99.988 Contrastive_loss: 1.1046 (1.2451) Loss: 1.1046 (1.2451)
-2025-01-06,09:37:36 | INFO | Train Epoch: 0 [1281600/6144000 (21%)] Data (t): 2.567 Batch (t): 3.173, 1581.13/s, 1581.13/s/gpu LR: 0.000001 Logit Scale: 99.984 Contrastive_loss: 1.0471 (1.2231) Loss: 1.0471 (1.2231)
-2025-01-06,09:43:09 | INFO | Train Epoch: 0 [1441600/6144000 (23%)] Data (t): 2.681 Batch (t): 3.335, 1582.09/s, 1582.09/s/gpu LR: 0.000001 Logit Scale: 99.979 Contrastive_loss: 1.0095 (1.2018) Loss: 1.0095 (1.2018)
-2025-01-06,09:48:53 | INFO | Train Epoch: 0 [1601600/6144000 (26%)] Data (t): 2.804 Batch (t): 3.435, 1531.44/s, 1531.44/s/gpu LR: 0.000001 Logit Scale: 99.974 Contrastive_loss: 0.98444 (1.1820) Loss: 0.98444 (1.1820)
-2025-01-06,09:54:24 | INFO | Train Epoch: 0 [1761600/6144000 (29%)] Data (t): 2.626 Batch (t): 3.316, 1520.47/s, 1520.47/s/gpu LR: 0.000001 Logit Scale: 99.969 Contrastive_loss: 0.96407 (1.1639) Loss: 0.96407 (1.1639)
-2025-01-06,10:00:01 | INFO | Train Epoch: 0 [1921600/6144000 (31%)] Data (t): 2.671 Batch (t): 3.364, 1553.63/s, 1553.63/s/gpu LR: 0.000001 Logit Scale: 99.964 Contrastive_loss: 1.0198 (1.1528) Loss: 1.0198 (1.1528)
-2025-01-06,10:05:52 | INFO | Train Epoch: 0 [2081600/6144000 (34%)] Data (t): 2.829 Batch (t): 3.518, 1520.85/s, 1520.85/s/gpu LR: 0.000001 Logit Scale: 99.959 Contrastive_loss: 0.89158 (1.1341) Loss: 0.89158 (1.1341)
-2025-01-06,10:11:27 | INFO | Train Epoch: 0 [2241600/6144000 (36%)] Data (t): 2.654 Batch (t): 3.348, 1530.28/s, 1530.28/s/gpu LR: 0.000001 Logit Scale: 99.955 Contrastive_loss: 0.91788 (1.1197) Loss: 0.91788 (1.1197)
-2025-01-06,10:17:02 | INFO | Train Epoch: 0 [2401600/6144000 (39%)] Data (t): 2.657 Batch (t): 3.349, 1652.39/s, 1652.39/s/gpu LR: 0.000002 Logit Scale: 99.951 Contrastive_loss: 0.95811 (1.1096) Loss: 0.95811 (1.1096)
-2025-01-06,10:22:32 | INFO | Train Epoch: 0 [2561600/6144000 (42%)] Data (t): 2.609 Batch (t): 3.301, 1596.74/s, 1596.74/s/gpu LR: 0.000002 Logit Scale: 99.948 Contrastive_loss: 0.86725 (1.0953) Loss: 0.86725 (1.0953)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (99005328 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,10:28:02 | INFO | Train Epoch: 0 [2721600/6144000 (44%)] Data (t): 2.615 Batch (t): 3.303, 1537.85/s, 1537.85/s/gpu LR: 0.000002 Logit Scale: 99.942 Contrastive_loss: 0.84464 (1.0814) Loss: 0.84464 (1.0814)
-2025-01-06,10:33:22 | INFO | Train Epoch: 0 [2881600/6144000 (47%)] Data (t): 2.499 Batch (t): 3.192, 1569.05/s, 1569.05/s/gpu LR: 0.000002 Logit Scale: 99.938 Contrastive_loss: 0.83948 (1.0687) Loss: 0.83948 (1.0687)
-2025-01-06,10:38:40 | INFO | Train Epoch: 0 [3041600/6144000 (50%)] Data (t): 2.493 Batch (t): 3.181, 1514.51/s, 1514.51/s/gpu LR: 0.000002 Logit Scale: 99.933 Contrastive_loss: 0.93175 (1.0618) Loss: 0.93175 (1.0618)
-2025-01-06,10:43:58 | INFO | Train Epoch: 0 [3201600/6144000 (52%)] Data (t): 2.489 Batch (t): 3.181, 1486.43/s, 1486.43/s/gpu LR: 0.000002 Logit Scale: 99.930 Contrastive_loss: 0.81837 (1.0502) Loss: 0.81837 (1.0502)
-2025-01-06,10:49:07 | INFO | Train Epoch: 0 [3361600/6144000 (55%)] Data (t): 2.405 Batch (t): 3.096, 1479.44/s, 1479.44/s/gpu LR: 0.000002 Logit Scale: 99.926 Contrastive_loss: 0.87805 (1.0424) Loss: 0.87805 (1.0424)
-2025-01-06,10:54:35 | INFO | Train Epoch: 0 [3521600/6144000 (57%)] Data (t): 2.588 Batch (t): 3.276, 1857.75/s, 1857.75/s/gpu LR: 0.000002 Logit Scale: 99.923 Contrastive_loss: 0.76513 (1.0304) Loss: 0.76513 (1.0304)
-2025-01-06,10:59:49 | INFO | Train Epoch: 0 [3681600/6144000 (60%)] Data (t): 2.445 Batch (t): 3.138, 1544.96/s, 1544.96/s/gpu LR: 0.000002 Logit Scale: 99.919 Contrastive_loss: 0.84803 (1.0228) Loss: 0.84803 (1.0228)
-2025-01-06,11:05:13 | INFO | Train Epoch: 0 [3841600/6144000 (63%)] Data (t): 2.552 Batch (t): 3.243, 1525.76/s, 1525.76/s/gpu LR: 0.000002 Logit Scale: 99.916 Contrastive_loss: 0.92491 (1.0189) Loss: 0.92491 (1.0189)
-2025-01-06,11:10:35 | INFO | Train Epoch: 0 [4001600/6144000 (65%)] Data (t): 2.563 Batch (t): 3.225, 1491.59/s, 1491.59/s/gpu LR: 0.000003 Logit Scale: 99.912 Contrastive_loss: 0.83757 (1.0119) Loss: 0.83757 (1.0119)
-2025-01-06,11:15:58 | INFO | Train Epoch: 0 [4161600/6144000 (68%)] Data (t): 2.527 Batch (t): 3.221, 1488.83/s, 1488.83/s/gpu LR: 0.000003 Logit Scale: 99.909 Contrastive_loss: 0.80776 (1.0043) Loss: 0.80776 (1.0043)
-2025-01-06,11:21:40 | INFO | Train Epoch: 0 [4321600/6144000 (70%)] Data (t): 2.729 Batch (t): 3.422, 1615.73/s, 1615.73/s/gpu LR: 0.000003 Logit Scale: 99.906 Contrastive_loss: 0.81137 (0.99743) Loss: 0.81137 (0.99743)
-2025-01-06,11:27:11 | INFO | Train Epoch: 0 [4481600/6144000 (73%)] Data (t): 2.623 Batch (t): 3.314, 1565.75/s, 1565.75/s/gpu LR: 0.000003 Logit Scale: 99.903 Contrastive_loss: 0.74376 (0.98868) Loss: 0.74376 (0.98868)
-2025-01-06,11:32:38 | INFO | Train Epoch: 0 [4641600/6144000 (76%)] Data (t): 2.576 Batch (t): 3.268, 1561.48/s, 1561.48/s/gpu LR: 0.000003 Logit Scale: 99.899 Contrastive_loss: 0.79706 (0.98229) Loss: 0.79706 (0.98229)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (99236546 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,11:38:13 | INFO | Train Epoch: 0 [4801600/6144000 (78%)] Data (t): 2.665 Batch (t): 3.356, 1484.13/s, 1484.13/s/gpu LR: 0.000003 Logit Scale: 99.895 Contrastive_loss: 0.80859 (0.97669) Loss: 0.80859 (0.97669)
-2025-01-06,11:43:46 | INFO | Train Epoch: 0 [4961600/6144000 (81%)] Data (t): 2.632 Batch (t): 3.323, 607.043/s, 607.043/s/gpu LR: 0.000003 Logit Scale: 99.891 Contrastive_loss: 0.81310 (0.97158) Loss: 0.81310 (0.97158)
-2025-01-06,11:49:15 | INFO | Train Epoch: 0 [5121600/6144000 (83%)] Data (t): 2.597 Batch (t): 3.291, 1450.34/s, 1450.34/s/gpu LR: 0.000003 Logit Scale: 99.889 Contrastive_loss: 0.75431 (0.96499) Loss: 0.75431 (0.96499)
-2025-01-06,11:54:40 | INFO | Train Epoch: 0 [5281600/6144000 (86%)] Data (t): 2.560 Batch (t): 3.253, 1492.93/s, 1492.93/s/gpu LR: 0.000003 Logit Scale: 99.886 Contrastive_loss: 0.78308 (0.95964) Loss: 0.78308 (0.95964)
-2025-01-06,12:00:16 | INFO | Train Epoch: 0 [5441600/6144000 (89%)] Data (t): 2.664 Batch (t): 3.357, 220.967/s, 220.967/s/gpu LR: 0.000003 Logit Scale: 99.883 Contrastive_loss: 0.72609 (0.95297) Loss: 0.72609 (0.95297)
-2025-01-06,12:05:37 | INFO | Train Epoch: 0 [5601600/6144000 (91%)] Data (t): 2.519 Batch (t): 3.212, 1510.94/s, 1510.94/s/gpu LR: 0.000004 Logit Scale: 99.883 Contrastive_loss: 0.74766 (0.94727) Loss: 0.74766 (0.94727)
-2025-01-06,12:10:54 | INFO | Train Epoch: 0 [5761600/6144000 (94%)] Data (t): 2.474 Batch (t): 3.164, 1512.46/s, 1512.46/s/gpu LR: 0.000004 Logit Scale: 99.880 Contrastive_loss: 0.82818 (0.94405) Loss: 0.82818 (0.94405)
-2025-01-06,12:16:16 | INFO | Train Epoch: 0 [5921600/6144000 (96%)] Data (t): 2.537 Batch (t): 3.226, 1522.56/s, 1522.56/s/gpu LR: 0.000004 Logit Scale: 99.878 Contrastive_loss: 0.75743 (0.93914) Loss: 0.75743 (0.93914)
-2025-01-06,12:21:29 | INFO | Train Epoch: 0 [6081600/6144000 (99%)] Data (t): 2.440 Batch (t): 3.130, 1507.76/s, 1507.76/s/gpu LR: 0.000004 Logit Scale: 99.876 Contrastive_loss: 0.68928 (0.93273) Loss: 0.68928 (0.93273)
-2025-01-06,12:23:42 | INFO | Train Epoch: 0 [6144000/6144000 (100%)] Data (t): 2.707 Batch (t): 3.400, 1427.40/s, 1427.40/s/gpu LR: 0.000004 Logit Scale: 99.874 Contrastive_loss: 0.74988 (0.92816) Loss: 0.74988 (0.92816)
-2025-01-06,12:23:42 | INFO | Starting zero-shot imagenet.
-2025-01-06,12:23:42 | INFO | Building zero-shot classifier
-  0%|          | 0/1000 [00:00<?, ?it/s]  1%|          | 10/1000 [00:00<00:20, 49.08it/s]  2%|▏         | 20/1000 [00:00<00:14, 65.48it/s]  4%|▍         | 40/1000 [00:00<00:11, 82.75it/s]  5%|▌         | 50/1000 [00:00<00:12, 74.57it/s]  6%|▌         | 60/1000 [00:00<00:13, 69.71it/s]  7%|▋         | 70/1000 [00:00<00:12, 72.50it/s]  8%|▊         | 80/1000 [00:01<00:12, 73.90it/s]  9%|▉         | 90/1000 [00:01<00:12, 75.68it/s] 10%|█         | 100/1000 [00:01<00:11, 78.43it/s] 11%|█         | 110/1000 [00:01<00:11, 80.01it/s] 12%|█▏        | 120/1000 [00:01<00:10, 81.60it/s] 13%|█▎        | 130/1000 [00:01<00:10, 83.51it/s] 14%|█▍        | 140/1000 [00:01<00:10, 82.99it/s] 15%|█▌        | 150/1000 [00:01<00:10, 83.65it/s] 16%|█▌        | 160/1000 [00:02<00:10, 82.50it/s] 17%|█▋        | 170/1000 [00:02<00:10, 81.80it/s] 18%|█▊        | 180/1000 [00:02<00:09, 82.28it/s] 19%|█▉        | 190/1000 [00:02<00:09, 82.82it/s] 20%|██        | 200/1000 [00:02<00:09, 83.51it/s] 22%|██▏       | 220/1000 [00:02<00:08, 87.89it/s] 23%|██▎       | 230/1000 [00:02<00:08, 87.26it/s] 24%|██▍       | 240/1000 [00:02<00:08, 86.73it/s] 25%|██▌       | 250/1000 [00:03<00:08, 87.27it/s] 27%|██▋       | 270/1000 [00:03<00:07, 94.72it/s] 28%|██▊       | 280/1000 [00:03<00:07, 93.05it/s] 30%|███       | 300/1000 [00:03<00:07, 98.47it/s] 32%|███▏      | 320/1000 [00:03<00:06, 97.92it/s] 33%|███▎      | 330/1000 [00:03<00:06, 96.15it/s] 34%|███▍      | 340/1000 [00:04<00:06, 94.94it/s] 35%|███▌      | 350/1000 [00:04<00:06, 95.51it/s] 36%|███▌      | 360/1000 [00:04<00:06, 95.61it/s] 37%|███▋      | 370/1000 [00:04<00:06, 94.12it/s] 39%|███▉      | 390/1000 [00:04<00:06, 96.60it/s] 40%|████      | 400/1000 [00:04<00:06, 94.82it/s] 41%|████      | 410/1000 [00:04<00:06, 96.01it/s] 42%|████▏     | 420/1000 [00:04<00:06, 93.31it/s] 44%|████▍     | 440/1000 [00:05<00:05, 93.94it/s] 45%|████▌     | 450/1000 [00:05<00:05, 91.80it/s] 46%|████▌     | 460/1000 [00:05<00:05, 91.62it/s] 47%|████▋     | 470/1000 [00:05<00:05, 91.57it/s] 48%|████▊     | 480/1000 [00:05<00:05, 91.45it/s] 49%|████▉     | 490/1000 [00:05<00:05, 91.29it/s] 50%|█████     | 500/1000 [00:05<00:05, 90.53it/s] 51%|█████     | 510/1000 [00:05<00:05, 89.64it/s] 52%|█████▏    | 520/1000 [00:05<00:05, 89.57it/s] 53%|█████▎    | 530/1000 [00:06<00:05, 89.39it/s] 54%|█████▍    | 540/1000 [00:06<00:05, 87.67it/s] 56%|█████▌    | 560/1000 [00:06<00:04, 91.17it/s] 57%|█████▋    | 570/1000 [00:06<00:04, 89.37it/s] 58%|█████▊    | 580/1000 [00:06<00:04, 84.92it/s] 59%|█████▉    | 590/1000 [00:06<00:04, 85.50it/s] 60%|██████    | 600/1000 [00:06<00:04, 85.99it/s] 61%|██████    | 610/1000 [00:07<00:04, 85.29it/s] 62%|██████▏   | 620/1000 [00:07<00:04, 83.33it/s] 63%|██████▎   | 630/1000 [00:07<00:04, 84.33it/s] 64%|██████▍   | 640/1000 [00:07<00:04, 86.29it/s] 65%|██████▌   | 650/1000 [00:07<00:04, 87.03it/s] 66%|██████▌   | 660/1000 [00:07<00:03, 85.57it/s] 67%|██████▋   | 670/1000 [00:07<00:03, 85.94it/s] 68%|██████▊   | 680/1000 [00:07<00:03, 86.43it/s] 69%|██████▉   | 690/1000 [00:07<00:03, 86.31it/s] 70%|███████   | 700/1000 [00:08<00:03, 86.60it/s] 71%|███████   | 710/1000 [00:08<00:03, 86.96it/s] 72%|███████▏  | 720/1000 [00:08<00:03, 87.17it/s] 73%|███████▎  | 730/1000 [00:08<00:03, 86.20it/s] 74%|███████▍  | 740/1000 [00:08<00:02, 87.20it/s] 75%|███████▌  | 750/1000 [00:08<00:02, 88.46it/s] 76%|███████▌  | 760/1000 [00:08<00:02, 89.18it/s] 77%|███████▋  | 770/1000 [00:08<00:02, 88.10it/s] 78%|███████▊  | 780/1000 [00:08<00:02, 89.55it/s] 80%|████████  | 800/1000 [00:09<00:02, 96.54it/s] 81%|████████  | 810/1000 [00:09<00:01, 95.26it/s] 82%|████████▏ | 820/1000 [00:09<00:01, 94.11it/s] 84%|████████▍ | 840/1000 [00:09<00:01, 94.74it/s] 85%|████████▌ | 850/1000 [00:09<00:01, 93.31it/s] 86%|████████▌ | 860/1000 [00:09<00:01, 92.56it/s] 87%|████████▋ | 870/1000 [00:09<00:01, 90.63it/s] 89%|████████▉ | 890/1000 [00:10<00:01, 94.08it/s] 90%|█████████ | 900/1000 [00:10<00:01, 91.94it/s] 91%|█████████ | 910/1000 [00:10<00:00, 90.68it/s] 92%|█████████▏| 920/1000 [00:10<00:00, 89.72it/s] 93%|█████████▎| 930/1000 [00:10<00:00, 89.43it/s] 94%|█████████▍| 940/1000 [00:10<00:00, 90.77it/s] 96%|█████████▌| 960/1000 [00:10<00:00, 96.57it/s] 97%|█████████▋| 970/1000 [00:10<00:00, 94.47it/s] 98%|█████████▊| 980/1000 [00:11<00:00, 91.87it/s] 99%|█████████▉| 990/1000 [00:11<00:00, 90.64it/s]100%|██████████| 1000/1000 [00:11<00:00, 92.91it/s]100%|██████████| 1000/1000 [00:11<00:00, 88.34it/s]
-2025-01-06,12:23:53 | INFO | Using classifier
-  0%|          | 0/51200 [00:00<?, ?it/s]  3%|▎         | 1600/51200 [00:17<08:53, 92.93it/s]  6%|▋         | 3200/51200 [00:17<03:42, 216.15it/s]  9%|▉         | 4800/51200 [00:18<02:03, 375.21it/s] 12%|█▎        | 6400/51200 [00:18<01:17, 576.72it/s] 16%|█▌        | 8000/51200 [00:19<00:53, 812.26it/s] 19%|█▉        | 9600/51200 [00:19<00:38, 1083.61it/s] 22%|██▏       | 11200/51200 [00:30<01:50, 361.43it/s] 25%|██▌       | 12800/51200 [00:30<01:16, 501.80it/s] 28%|██▊       | 14400/51200 [00:31<00:54, 677.74it/s] 31%|███▏      | 16000/51200 [00:31<00:39, 885.18it/s] 34%|███▍      | 17600/51200 [00:32<00:29, 1129.44it/s] 38%|███▊      | 19200/51200 [00:33<00:22, 1399.30it/s] 41%|████      | 20800/51200 [00:43<01:16, 399.47it/s]  44%|████▍     | 22400/51200 [00:44<00:52, 544.34it/s] 47%|████▋     | 24000/51200 [00:45<00:40, 677.22it/s] 50%|█████     | 25600/51200 [00:45<00:28, 883.29it/s] 53%|█████▎    | 27200/51200 [00:46<00:21, 1122.63it/s] 56%|█████▋    | 28800/51200 [00:46<00:16, 1387.75it/s] 59%|█████▉    | 30400/51200 [00:58<00:54, 378.72it/s]  62%|██████▎   | 32000/51200 [00:58<00:37, 514.46it/s] 66%|██████▌   | 33600/51200 [00:59<00:25, 684.84it/s] 69%|██████▉   | 35200/51200 [00:59<00:17, 893.80it/s] 72%|███████▏  | 36800/51200 [01:00<00:12, 1139.24it/s] 75%|███████▌  | 38400/51200 [01:00<00:09, 1418.07it/s] 78%|███████▊  | 40000/51200 [01:11<00:27, 405.00it/s]  81%|████████▏ | 41600/51200 [01:11<00:17, 553.37it/s] 84%|████████▍ | 43200/51200 [01:12<00:10, 744.05it/s] 88%|████████▊ | 44800/51200 [01:12<00:06, 978.64it/s] 91%|█████████ | 46400/51200 [01:12<00:03, 1256.23it/s] 94%|█████████▍| 48000/51200 [01:13<00:02, 1571.02it/s] 97%|█████████▋| 49600/51200 [01:24<00:03, 401.25it/s] 100%|██████████| 51200/51200 [01:24<00:00, 547.30it/s]100%|██████████| 51200/51200 [01:24<00:00, 603.82it/s]
-2025-01-06,12:25:18 | INFO | Finished zero-shot imagenet.
-2025-01-06,12:25:37 | INFO | Eval Epoch: 1 [1600 / 120000]	Clip Loss: 0.972575	
-2025-01-06,12:29:16 | INFO | Eval Epoch: 1 imagenet-zeroshot-val-top1: 0.6551	imagenet-zeroshot-val-top5: 0.8933	image_to_text_mean_rank: 83.8506	image_to_text_median_rank: 3.0000	image_to_text_R@1: 0.3803	image_to_text_R@5: 0.6088	image_to_text_R@10: 0.6962	text_to_image_mean_rank: 130.2766	text_to_image_median_rank: 3.0000	text_to_image_R@1: 0.3689	text_to_image_R@5: 0.6036	text_to_image_R@10: 0.6917	clip_val_loss: 0.9142	epoch: 1.0000	num_samples: 53386.0000
-2025-01-06,12:29:18 | INFO | Start epoch 1
-2025-01-06,12:29:40 | INFO | Train Epoch: 1 [   1600/6144000 (0%)] Data (t): 21.082 Batch (t): 21.768, 73.5030/s, 73.5030/s/gpu LR: 0.000004 Logit Scale: 99.874 Contrastive_loss: 0.68374 (0.68374) Loss: 0.68374 (0.68374)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (93950400 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,12:34:46 | INFO | Train Epoch: 1 [ 161600/6144000 (3%)] Data (t): 2.370 Batch (t): 3.061, 1511.08/s, 1511.08/s/gpu LR: 0.000004 Logit Scale: 99.879 Contrastive_loss: 0.70394 (0.69384) Loss: 0.70394 (0.69384)
-2025-01-06,12:40:06 | INFO | Train Epoch: 1 [ 321600/6144000 (5%)] Data (t): 2.509 Batch (t): 3.201, 1672.00/s, 1672.00/s/gpu LR: 0.000004 Logit Scale: 99.880 Contrastive_loss: 0.68444 (0.69071) Loss: 0.68444 (0.69071)
-2025-01-06,12:45:14 | INFO | Train Epoch: 1 [ 481600/6144000 (8%)] Data (t): 2.390 Batch (t): 3.080, 125.884/s, 125.884/s/gpu LR: 0.000004 Logit Scale: 99.880 Contrastive_loss: 0.66763 (0.68494) Loss: 0.66763 (0.68494)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (107736028 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (105557251 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,12:50:39 | INFO | Train Epoch: 1 [ 641600/6144000 (10%)] Data (t): 2.561 Batch (t): 3.253, 1602.49/s, 1602.49/s/gpu LR: 0.000004 Logit Scale: 99.875 Contrastive_loss: 0.69669 (0.68729) Loss: 0.69669 (0.68729)
-2025-01-06,12:56:19 | INFO | Train Epoch: 1 [ 801600/6144000 (13%)] Data (t): 2.703 Batch (t): 3.397, 115.582/s, 115.582/s/gpu LR: 0.000004 Logit Scale: 99.871 Contrastive_loss: 0.71412 (0.69176) Loss: 0.71412 (0.69176)
-2025-01-06,13:01:51 | INFO | Train Epoch: 1 [ 961600/6144000 (16%)] Data (t): 2.602 Batch (t): 3.320, 1594.75/s, 1594.75/s/gpu LR: 0.000004 Logit Scale: 99.868 Contrastive_loss: 0.69319 (0.69196) Loss: 0.69319 (0.69196)
-2025-01-06,13:07:23 | INFO | Train Epoch: 1 [1121600/6144000 (18%)] Data (t): 2.603 Batch (t): 3.315, 1620.74/s, 1620.74/s/gpu LR: 0.000005 Logit Scale: 99.865 Contrastive_loss: 0.66808 (0.68898) Loss: 0.66808 (0.68898)
-2025-01-06,13:13:04 | INFO | Train Epoch: 1 [1281600/6144000 (21%)] Data (t): 2.700 Batch (t): 3.413, 179.816/s, 179.816/s/gpu LR: 0.000005 Logit Scale: 99.860 Contrastive_loss: 0.64957 (0.68460) Loss: 0.64957 (0.68460)
-2025-01-06,13:18:23 | INFO | Train Epoch: 1 [1441600/6144000 (23%)] Data (t): 2.491 Batch (t): 3.189, 1513.19/s, 1513.19/s/gpu LR: 0.000005 Logit Scale: 99.857 Contrastive_loss: 0.76699 (0.69284) Loss: 0.76699 (0.69284)
-2025-01-06,13:23:59 | INFO | Train Epoch: 1 [1601600/6144000 (26%)] Data (t): 2.650 Batch (t): 3.362, 1564.70/s, 1564.70/s/gpu LR: 0.000005 Logit Scale: 99.855 Contrastive_loss: 0.73591 (0.69675) Loss: 0.73591 (0.69675)
-2025-01-06,13:29:32 | INFO | Train Epoch: 1 [1761600/6144000 (29%)] Data (t): 2.633 Batch (t): 3.326, 252.462/s, 252.462/s/gpu LR: 0.000005 Logit Scale: 99.851 Contrastive_loss: 0.67096 (0.69460) Loss: 0.67096 (0.69460)
-2025-01-06,13:34:57 | INFO | Train Epoch: 1 [1921600/6144000 (31%)] Data (t): 2.566 Batch (t): 3.258, 1046.24/s, 1046.24/s/gpu LR: 0.000005 Logit Scale: 99.849 Contrastive_loss: 0.68953 (0.69421) Loss: 0.68953 (0.69421)
-2025-01-06,13:40:41 | INFO | Train Epoch: 1 [2081600/6144000 (34%)] Data (t): 2.737 Batch (t): 3.432, 1482.58/s, 1482.58/s/gpu LR: 0.000005 Logit Scale: 99.851 Contrastive_loss: 0.68663 (0.69367) Loss: 0.68663 (0.69367)
-2025-01-06,13:45:54 | INFO | Train Epoch: 1 [2241600/6144000 (36%)] Data (t): 2.446 Batch (t): 3.132, 125.479/s, 125.479/s/gpu LR: 0.000005 Logit Scale: 99.864 Contrastive_loss: 0.55209 (0.68423) Loss: 0.55209 (0.68423)
-2025-01-06,13:51:08 | INFO | Train Epoch: 1 [2401600/6144000 (39%)] Data (t): 2.445 Batch (t): 3.138, 1555.17/s, 1555.17/s/gpu LR: 0.000005 Logit Scale: 99.872 Contrastive_loss: 0.48040 (0.67149) Loss: 0.48040 (0.67149)
-2025-01-06,13:56:39 | INFO | Train Epoch: 1 [2561600/6144000 (42%)] Data (t): 2.623 Batch (t): 3.318, 1448.73/s, 1448.73/s/gpu LR: 0.000005 Logit Scale: 99.871 Contrastive_loss: 0.59666 (0.66709) Loss: 0.59666 (0.66709)
-2025-01-06,14:01:54 | INFO | Train Epoch: 1 [2721600/6144000 (44%)] Data (t): 2.453 Batch (t): 3.144, 127.268/s, 127.268/s/gpu LR: 0.000006 Logit Scale: 99.872 Contrastive_loss: 0.58230 (0.66238) Loss: 0.58230 (0.66238)
-2025-01-06,14:07:11 | INFO | Train Epoch: 1 [2881600/6144000 (47%)] Data (t): 2.483 Batch (t): 3.176, 1568.55/s, 1568.55/s/gpu LR: 0.000006 Logit Scale: 99.872 Contrastive_loss: 0.57271 (0.65766) Loss: 0.57271 (0.65766)
-2025-01-06,14:12:39 | INFO | Train Epoch: 1 [3041600/6144000 (50%)] Data (t): 2.587 Batch (t): 3.278, 1551.33/s, 1551.33/s/gpu LR: 0.000006 Logit Scale: 99.870 Contrastive_loss: 0.59374 (0.65447) Loss: 0.59374 (0.65447)
-2025-01-06,14:18:06 | INFO | Train Epoch: 1 [3201600/6144000 (52%)] Data (t): 2.571 Batch (t): 3.265, 117.867/s, 117.867/s/gpu LR: 0.000006 Logit Scale: 99.870 Contrastive_loss: 0.60872 (0.65229) Loss: 0.60872 (0.65229)
-2025-01-06,14:23:16 | INFO | Train Epoch: 1 [3361600/6144000 (55%)] Data (t): 2.411 Batch (t): 3.108, 1529.80/s, 1529.80/s/gpu LR: 0.000006 Logit Scale: 99.870 Contrastive_loss: 0.59081 (0.64949) Loss: 0.59081 (0.64949)
-2025-01-06,14:28:56 | INFO | Train Epoch: 1 [3521600/6144000 (57%)] Data (t): 2.694 Batch (t): 3.391, 1547.31/s, 1547.31/s/gpu LR: 0.000006 Logit Scale: 99.869 Contrastive_loss: 0.59517 (0.64713) Loss: 0.59517 (0.64713)
-2025-01-06,14:34:41 | INFO | Train Epoch: 1 [3681600/6144000 (60%)] Data (t): 2.764 Batch (t): 3.457, 92.5510/s, 92.5510/s/gpu LR: 0.000006 Logit Scale: 99.867 Contrastive_loss: 0.58804 (0.64467) Loss: 0.58804 (0.64467)
-2025-01-06,14:39:58 | INFO | Train Epoch: 1 [3841600/6144000 (63%)] Data (t): 2.472 Batch (t): 3.168, 1481.81/s, 1481.81/s/gpu LR: 0.000006 Logit Scale: 99.865 Contrastive_loss: 0.56593 (0.64152) Loss: 0.56593 (0.64152)
-2025-01-06,14:45:40 | INFO | Train Epoch: 1 [4001600/6144000 (65%)] Data (t): 2.718 Batch (t): 3.415, 1527.33/s, 1527.33/s/gpu LR: 0.000006 Logit Scale: 99.866 Contrastive_loss: 0.63403 (0.64123) Loss: 0.63403 (0.64123)
-2025-01-06,14:51:36 | INFO | Train Epoch: 1 [4161600/6144000 (68%)] Data (t): 2.868 Batch (t): 3.564, 115.420/s, 115.420/s/gpu LR: 0.000006 Logit Scale: 99.872 Contrastive_loss: 0.51982 (0.63673) Loss: 0.51982 (0.63673)
-/home/wenwen/miniconda3/envs/open_clip/lib/python3.10/site-packages/PIL/Image.py:3406: DecompressionBombWarning: Image size (89518148 pixels) exceeds limit of 89478485 pixels, could be decompression bomb DOS attack.
-  warnings.warn(
-2025-01-06,14:57:02 | INFO | Train Epoch: 1 [4321600/6144000 (70%)] Data (t): 2.565 Batch (t): 3.262, 1437.34/s, 1437.34/s/gpu LR: 0.000007 Logit Scale: 99.886 Contrastive_loss: 0.46191 (0.63049) Loss: 0.46191 (0.63049)
-2025-01-06,15:02:46 | INFO | Train Epoch: 1 [4481600/6144000 (73%)] Data (t): 2.739 Batch (t): 3.435, 1586.74/s, 1586.74/s/gpu LR: 0.000007 Logit Scale: 99.893 Contrastive_loss: 0.52492 (0.62685) Loss: 0.52492 (0.62685)
-2025-01-06,15:08:28 | INFO | Train Epoch: 1 [4641600/6144000 (76%)] Data (t): 2.724 Batch (t): 3.423, 102.630/s, 102.630/s/gpu LR: 0.000007 Logit Scale: 99.896 Contrastive_loss: 0.55709 (0.62453) Loss: 0.55709 (0.62453)
-2025-01-06,15:13:51 | INFO | Train Epoch: 1 [4801600/6144000 (78%)] Data (t): 2.529 Batch (t): 3.235, 1524.36/s, 1524.36/s/gpu LR: 0.000007 Logit Scale: 99.899 Contrastive_loss: 0.49420 (0.62032) Loss: 0.49420 (0.62032)
-2025-01-06,15:19:23 | INFO | Train Epoch: 1 [4961600/6144000 (81%)] Data (t): 2.617 Batch (t): 3.316, 1495.04/s, 1495.04/s/gpu LR: 0.000007 Logit Scale: 99.907 Contrastive_loss: 0.44179 (0.61474) Loss: 0.44179 (0.61474)
-2025-01-06,15:24:41 | INFO | Train Epoch: 1 [5121600/6144000 (83%)] Data (t): 2.490 Batch (t): 3.185, 116.055/s, 116.055/s/gpu LR: 0.000007 Logit Scale: 99.913 Contrastive_loss: 0.47933 (0.61064) Loss: 0.47933 (0.61064)
-2025-01-06,15:29:59 | INFO | Train Epoch: 1 [5281600/6144000 (86%)] Data (t): 2.479 Batch (t): 3.177, 1563.03/s, 1563.03/s/gpu LR: 0.000007 Logit Scale: 99.915 Contrastive_loss: 0.52407 (0.60809) Loss: 0.52407 (0.60809)
-2025-01-06,15:35:27 | INFO | Train Epoch: 1 [5441600/6144000 (89%)] Data (t): 2.558 Batch (t): 3.279, 1450.06/s, 1450.06/s/gpu LR: 0.000007 Logit Scale: 99.919 Contrastive_loss: 0.46592 (0.60403) Loss: 0.46592 (0.60403)
-2025-01-06,15:40:51 | INFO | Train Epoch: 1 [5601600/6144000 (91%)] Data (t): 2.538 Batch (t): 3.240, 158.884/s, 158.884/s/gpu LR: 0.000007 Logit Scale: 99.922 Contrastive_loss: 0.50746 (0.60135) Loss: 0.50746 (0.60135)
-2025-01-06,15:46:08 | INFO | Train Epoch: 1 [5761600/6144000 (94%)] Data (t): 2.461 Batch (t): 3.165, 362.205/s, 362.205/s/gpu LR: 0.000007 Logit Scale: 99.926 Contrastive_loss: 0.53605 (0.59958) Loss: 0.53605 (0.59958)
-2025-01-06,15:51:24 | INFO | Train Epoch: 1 [5921600/6144000 (96%)] Data (t): 2.470 Batch (t): 3.163, 1555.83/s, 1555.83/s/gpu LR: 0.000008 Logit Scale: 99.927 Contrastive_loss: 0.48272 (0.59651) Loss: 0.48272 (0.59651)
-2025-01-06,15:56:45 | INFO | Train Epoch: 1 [6081600/6144000 (99%)] Data (t): 2.517 Batch (t): 3.208, 135.328/s, 135.328/s/gpu LR: 0.000008 Logit Scale: 99.930 Contrastive_loss: 0.53923 (0.59504) Loss: 0.53923 (0.59504)
-2025-01-06,15:59:01 | INFO | Train Epoch: 1 [6144000/6144000 (100%)] Data (t): 2.807 Batch (t): 3.497, 494.268/s, 494.268/s/gpu LR: 0.000008 Logit Scale: 99.937 Contrastive_loss: 0.48580 (0.59231) Loss: 0.48580 (0.59231)
-2025-01-06,15:59:01 | INFO | Starting zero-shot imagenet.
-2025-01-06,15:59:01 | INFO | Building zero-shot classifier
-  0%|          | 0/1000 [00:00<?, ?it/s]  1%|          | 10/1000 [00:00<00:14, 70.61it/s]  2%|▏         | 20/1000 [00:00<00:13, 73.93it/s]  3%|▎         | 30/1000 [00:00<00:12, 76.07it/s]  4%|▍         | 40/1000 [00:00<00:11, 83.01it/s]  5%|▌         | 50/1000 [00:00<00:10, 87.38it/s]  6%|▌         | 60/1000 [00:00<00:10, 91.11it/s]  7%|▋         | 70/1000 [00:00<00:10, 86.56it/s]  8%|▊         | 80/1000 [00:00<00:10, 89.67it/s]  9%|▉         | 90/1000 [00:01<00:10, 89.18it/s] 10%|█         | 100/1000 [00:01<00:10, 89.12it/s] 11%|█         | 110/1000 [00:01<00:09, 89.04it/s] 12%|█▏        | 120/1000 [00:01<00:09, 90.66it/s] 13%|█▎        | 130/1000 [00:01<00:09, 88.71it/s] 14%|█▍        | 140/1000 [00:01<00:09, 87.41it/s] 15%|█▌        | 150/1000 [00:01<00:09, 87.86it/s] 16%|█▌        | 160/1000 [00:01<00:09, 86.63it/s] 17%|█▋        | 170/1000 [00:01<00:09, 85.75it/s] 18%|█▊        | 180/1000 [00:02<00:09, 85.10it/s] 20%|██        | 200/1000 [00:02<00:08, 89.23it/s] 21%|██        | 210/1000 [00:02<00:08, 91.43it/s] 22%|██▏       | 220/1000 [00:02<00:08, 89.71it/s] 23%|██▎       | 230/1000 [00:02<00:08, 90.15it/s] 24%|██▍       | 240/1000 [00:02<00:08, 88.41it/s] 25%|██▌       | 250/1000 [00:02<00:08, 88.38it/s] 26%|██▌       | 260/1000 [00:02<00:08, 87.37it/s] 27%|██▋       | 270/1000 [00:03<00:08, 86.44it/s] 28%|██▊       | 280/1000 [00:03<00:08, 87.44it/s] 30%|███       | 300/1000 [00:03<00:07, 90.65it/s] 31%|███       | 310/1000 [00:03<00:07, 89.18it/s] 32%|███▏      | 320/1000 [00:03<00:07, 90.91it/s] 33%|███▎      | 330/1000 [00:03<00:07, 90.00it/s] 34%|███▍      | 340/1000 [00:03<00:07, 89.97it/s] 35%|███▌      | 350/1000 [00:03<00:07, 89.17it/s] 36%|███▌      | 360/1000 [00:04<00:06, 91.61it/s] 37%|███▋      | 370/1000 [00:04<00:07, 88.52it/s] 38%|███▊      | 380/1000 [00:04<00:07, 87.81it/s] 39%|███▉      | 390/1000 [00:04<00:06, 87.49it/s] 40%|████      | 400/1000 [00:04<00:06, 86.62it/s] 41%|████      | 410/1000 [00:04<00:06, 89.96it/s] 42%|████▏     | 420/1000 [00:04<00:06, 90.18it/s] 44%|████▍     | 440/1000 [00:04<00:06, 92.00it/s] 45%|████▌     | 450/1000 [00:05<00:05, 92.17it/s] 46%|████▌     | 460/1000 [00:05<00:05, 93.92it/s] 47%|████▋     | 470/1000 [00:05<00:05, 93.96it/s] 48%|████▊     | 480/1000 [00:05<00:05, 91.44it/s] 49%|████▉     | 490/1000 [00:05<00:05, 93.42it/s] 50%|█████     | 500/1000 [00:05<00:05, 93.32it/s] 51%|█████     | 510/1000 [00:05<00:05, 94.74it/s] 52%|█████▏    | 520/1000 [00:05<00:05, 95.64it/s] 54%|█████▍    | 540/1000 [00:06<00:04, 95.36it/s] 55%|█████▌    | 550/1000 [00:06<00:04, 96.02it/s] 57%|█████▋    | 570/1000 [00:06<00:04, 96.31it/s] 59%|█████▉    | 590/1000 [00:06<00:04, 96.49it/s] 60%|██████    | 600/1000 [00:06<00:04, 97.02it/s] 61%|██████    | 610/1000 [00:06<00:04, 95.04it/s] 63%|██████▎   | 630/1000 [00:06<00:03, 97.25it/s] 64%|██████▍   | 640/1000 [00:07<00:03, 95.37it/s] 65%|██████▌   | 650/1000 [00:07<00:03, 94.99it/s] 67%|██████▋   | 670/1000 [00:07<00:03, 98.68it/s] 68%|██████▊   | 680/1000 [00:07<00:03, 96.22it/s] 69%|██████▉   | 690/1000 [00:07<00:03, 94.48it/s] 70%|███████   | 700/1000 [00:07<00:03, 92.69it/s] 72%|███████▏  | 720/1000 [00:07<00:02, 95.95it/s] 73%|███████▎  | 730/1000 [00:08<00:02, 94.54it/s] 74%|███████▍  | 740/1000 [00:08<00:02, 95.44it/s] 75%|███████▌  | 750/1000 [00:08<00:02, 93.36it/s] 76%|███████▌  | 760/1000 [00:08<00:02, 92.09it/s] 77%|███████▋  | 770/1000 [00:08<00:02, 90.58it/s] 78%|███████▊  | 780/1000 [00:08<00:02, 90.26it/s] 79%|███████▉  | 790/1000 [00:08<00:02, 88.95it/s] 80%|████████  | 800/1000 [00:08<00:02, 88.50it/s] 81%|████████  | 810/1000 [00:08<00:02, 87.44it/s] 82%|████████▏ | 820/1000 [00:09<00:02, 89.41it/s] 83%|████████▎ | 830/1000 [00:09<00:01, 88.54it/s] 85%|████████▌ | 850/1000 [00:09<00:01, 90.91it/s] 86%|████████▌ | 860/1000 [00:09<00:01, 90.17it/s] 87%|████████▋ | 870/1000 [00:09<00:01, 89.75it/s] 88%|████████▊ | 880/1000 [00:09<00:01, 89.46it/s] 89%|████████▉ | 890/1000 [00:09<00:01, 88.63it/s] 90%|█████████ | 900/1000 [00:09<00:01, 90.82it/s] 91%|█████████ | 910/1000 [00:10<00:01, 89.49it/s] 92%|█████████▏| 920/1000 [00:10<00:00, 88.66it/s] 94%|█████████▍| 940/1000 [00:10<00:00, 95.45it/s] 96%|█████████▌| 960/1000 [00:10<00:00, 95.46it/s] 97%|█████████▋| 970/1000 [00:10<00:00, 91.20it/s] 98%|█████████▊| 980/1000 [00:10<00:00, 90.29it/s] 99%|█████████▉| 990/1000 [00:10<00:00, 90.35it/s]100%|██████████| 1000/1000 [00:10<00:00, 90.97it/s]
-2025-01-06,15:59:12 | INFO | Using classifier
-  0%|          | 0/51200 [00:00<?, ?it/s]  3%|▎         | 1600/51200 [00:17<08:51, 93.33it/s]  6%|▋         | 3200/51200 [00:17<03:40, 217.69it/s]  9%|▉         | 4800/51200 [00:18<02:02, 379.97it/s] 12%|█▎        | 6400/51200 [00:18<01:16, 586.06it/s] 16%|█▌        | 8000/51200 [00:19<00:51, 839.20it/s] 19%|█▉        | 9600/51200 [00:19<00:36, 1128.64it/s] 22%|██▏       | 11200/51200 [00:31<01:58, 336.89it/s] 25%|██▌       | 12800/51200 [00:31<01:21, 469.58it/s] 28%|██▊       | 14400/51200 [00:32<00:57, 637.10it/s] 31%|███▏      | 16000/51200 [00:32<00:41, 842.53it/s] 34%|███▍      | 17600/51200 [00:33<00:30, 1084.80it/s] 38%|███▊      | 19200/51200 [00:33<00:23, 1349.11it/s] 41%|████      | 20800/51200 [00:45<01:25, 353.50it/s]  44%|████▍     | 22400/51200 [00:46<00:59, 483.46it/s] 47%|████▋     | 24000/51200 [00:46<00:42, 646.60it/s] 50%|█████     | 25600/51200 [00:47<00:30, 848.03it/s] 53%|█████▎    | 27200/51200 [00:47<00:21, 1102.88it/s] 56%|█████▋    | 28800/51200 [00:48<00:15, 1404.56it/s] 59%|█████▉    | 30400/51200 [00:58<00:50, 414.94it/s]  62%|██████▎   | 32000/51200 [00:58<00:33, 564.84it/s] 66%|██████▌   | 33600/51200 [01:00<00:27, 633.47it/s] 69%|██████▉   | 35200/51200 [01:01<00:18, 842.66it/s] 72%|███████▏  | 36800/51200 [01:01<00:13, 1092.78it/s] 75%|███████▌  | 38400/51200 [01:02<00:09, 1361.73it/s] 78%|███████▊  | 40000/51200 [01:10<00:23, 472.80it/s]  81%|████████▏ | 41600/51200 [01:11<00:15, 636.64it/s] 84%|████████▍ | 43200/51200 [01:13<00:11, 673.67it/s] 88%|████████▊ | 44800/51200 [01:13<00:07, 881.63it/s] 91%|█████████ | 46400/51200 [01:14<00:04, 1125.40it/s] 94%|█████████▍| 48000/51200 [01:14<00:02, 1405.26it/s] 97%|█████████▋| 49600/51200 [01:23<00:03, 474.73it/s] 100%|██████████| 51200/51200 [01:23<00:00, 651.88it/s]100%|██████████| 51200/51200 [01:23<00:00, 610.98it/s]
-2025-01-06,16:00:36 | INFO | Finished zero-shot imagenet.
-2025-01-06,16:00:56 | INFO | Eval Epoch: 2 [1600 / 120000]	Clip Loss: 1.004295	
-2025-01-06,16:04:46 | INFO | Eval Epoch: 2 imagenet-zeroshot-val-top1: 0.6247	imagenet-zeroshot-val-top5: 0.8742	image_to_text_mean_rank: 89.6333	image_to_text_median_rank: 3.0000	image_to_text_R@1: 0.3747	image_to_text_R@5: 0.6116	image_to_text_R@10: 0.6977	text_to_image_mean_rank: 129.5521	text_to_image_median_rank: 3.0000	text_to_image_R@1: 0.3678	text_to_image_R@5: 0.6092	text_to_image_R@10: 0.7002	clip_val_loss: 0.9456	epoch: 2.0000	num_samples: 53386.0000
-I0106 16:04:48.966000 2645572 site-packages/torch/_dynamo/utils.py:399] TorchDynamo compilation metrics:
-I0106 16:04:48.966000 2645572 site-packages/torch/_dynamo/utils.py:399] Function, Runtimes (s)
-I0106 16:04:48.979000 2645572 site-packages/torch/_subclasses/fake_tensor.py:2423] FakeTensor cache stats:
-I0106 16:04:48.979000 2645572 site-packages/torch/_subclasses/fake_tensor.py:2424]   cache_hits: 0
-I0106 16:04:48.979000 2645572 site-packages/torch/_subclasses/fake_tensor.py:2425]   cache_misses: 0
-2025-01-08,10:21:02 | INFO | Running with a single process. Device cuda.
-2025-01-08,10:21:02 | INFO | Loaded ViT-B-32 model config.
-2025-01-08,10:21:03 | INFO | Loading pretrained ViT-B-32 weights (/mnt/shared/models/open_clip/CLIP-ViT-B-32-laion2B-s34B-b79K/open_clip_pytorch_model.bin).
-2025-01-08,10:21:04 | INFO | Model:
-2025-01-08,10:21:04 | INFO | CLIP(
-  (visual): VisionTransformer(
-    (conv1): Conv2d(3, 768, kernel_size=(32, 32), stride=(32, 32), bias=False)
-    (conv1_alpha): Conv2d(1, 768, kernel_size=(32, 32), stride=(32, 32), bias=False)
-    (patch_dropout): Identity()
-    (ln_pre): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-    (transformer): Transformer(
-      (resblocks): ModuleList(
-        (0-11): 12 x ResidualAttentionBlock(
-          (ln_1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (attn): MultiheadAttention(
-            (out_proj): NonDynamicallyQuantizableLinear(in_features=768, out_features=768, bias=True)
-          )
-          (ls_1): Identity()
-          (ln_2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (mlp): Sequential(
-            (c_fc): Linear(in_features=768, out_features=3072, bias=True)
-            (gelu): GELU(approximate='none')
-            (c_proj): Linear(in_features=3072, out_features=768, bias=True)
-          )
-          (ls_2): Identity()
-        )
-      )
-    )
-    (ln_post): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-  )
-  (transformer): Transformer(
-    (resblocks): ModuleList(
-      (0-11): 12 x ResidualAttentionBlock(
-        (ln_1): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
-        (attn): MultiheadAttention(
-          (out_proj): NonDynamicallyQuantizableLinear(in_features=512, out_features=512, bias=True)
-        )
-        (ls_1): Identity()
-        (ln_2): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
-        (mlp): Sequential(
-          (c_fc): Linear(in_features=512, out_features=2048, bias=True)
-          (gelu): GELU(approximate='none')
-          (c_proj): Linear(in_features=2048, out_features=512, bias=True)
-        )
-        (ls_2): Identity()
-      )
-    )
-  )
-  (token_embedding): Embedding(49408, 512)
-  (ln_final): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
-)
-2025-01-08,10:21:04 | INFO | Params:
-2025-01-08,10:21:04 | INFO |   accum_freq: 1
-2025-01-08,10:21:04 | INFO |   aug_cfg: {}
-2025-01-08,10:21:04 | INFO |   batch_size: 1600
-2025-01-08,10:21:04 | INFO |   beta1: 0.9
-2025-01-08,10:21:04 | INFO |   beta2: 0.98
-2025-01-08,10:21:04 | INFO |   cache_dir: None
-2025-01-08,10:21:04 | INFO |   checkpoint_path: ./logs/2025_01_08-10_21_02-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp/checkpoints
-2025-01-08,10:21:04 | INFO |   coca_caption_loss_weight: 2.0
-2025-01-08,10:21:04 | INFO |   coca_contrastive_loss_weight: 1.0
-2025-01-08,10:21:04 | INFO |   copy_codebase: False
-2025-01-08,10:21:04 | INFO |   csv_caption_key: title
-2025-01-08,10:21:04 | INFO |   csv_img_key: filepath
-2025-01-08,10:21:04 | INFO |   csv_separator: 	
-2025-01-08,10:21:04 | INFO |   dataset_resampled: False
-2025-01-08,10:21:04 | INFO |   dataset_type: webdataset
-2025-01-08,10:21:04 | INFO |   ddp_static_graph: False
-2025-01-08,10:21:04 | INFO |   debug: False
-2025-01-08,10:21:04 | INFO |   delete_previous_checkpoint: False
-2025-01-08,10:21:04 | INFO |   device: cuda
-2025-01-08,10:21:04 | INFO |   dist_backend: None
-2025-01-08,10:21:04 | INFO |   dist_url: None
-2025-01-08,10:21:04 | INFO |   distill: False
-2025-01-08,10:21:04 | INFO |   distill_model: None
-2025-01-08,10:21:04 | INFO |   distill_pretrained: None
-2025-01-08,10:21:04 | INFO |   distributed: False
-2025-01-08,10:21:04 | INFO |   epochs: 4
-2025-01-08,10:21:04 | INFO |   epochs_cooldown: None
-2025-01-08,10:21:04 | INFO |   eps: 1e-06
-2025-01-08,10:21:04 | INFO |   force_custom_text: False
-2025-01-08,10:21:04 | INFO |   force_image_size: None
-2025-01-08,10:21:04 | INFO |   force_patch_dropout: None
-2025-01-08,10:21:04 | INFO |   force_quick_gelu: False
-2025-01-08,10:21:04 | INFO |   gather_with_grad: False
-2025-01-08,10:21:04 | INFO |   grad_checkpointing: False
-2025-01-08,10:21:04 | INFO |   grad_clip_norm: None
-2025-01-08,10:21:04 | INFO |   horovod: False
-2025-01-08,10:21:04 | INFO |   image_interpolation: None
-2025-01-08,10:21:04 | INFO |   image_mean: None
-2025-01-08,10:21:04 | INFO |   image_resize_mode: None
-2025-01-08,10:21:04 | INFO |   image_std: None
-2025-01-08,10:21:04 | INFO |   imagenet_v2: None
-2025-01-08,10:21:04 | INFO |   imagenet_val: /mnt/shared/data/imagenet-1k/val
-2025-01-08,10:21:04 | INFO |   local_loss: False
-2025-01-08,10:21:04 | INFO |   local_rank: 0
-2025-01-08,10:21:04 | INFO |   lock_image: False
-2025-01-08,10:21:04 | INFO |   lock_image_freeze_bn_stats: False
-2025-01-08,10:21:04 | INFO |   lock_image_unlocked_groups: 0
-2025-01-08,10:21:04 | INFO |   lock_text: False
-2025-01-08,10:21:04 | INFO |   lock_text_freeze_layer_norm: False
-2025-01-08,10:21:04 | INFO |   lock_text_unlocked_layers: 0
-2025-01-08,10:21:04 | INFO |   log_every_n_steps: 100
-2025-01-08,10:21:04 | INFO |   log_level: 20
-2025-01-08,10:21:04 | INFO |   log_local: False
-2025-01-08,10:21:04 | INFO |   log_path: ./logs/2025_01_08-10_21_02-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp/out.log
-2025-01-08,10:21:04 | INFO |   logs: ./logs/
-2025-01-08,10:21:04 | INFO |   loss_dist_impl: None
-2025-01-08,10:21:04 | INFO |   lr: 1e-05
-2025-01-08,10:21:04 | INFO |   lr_cooldown_end: 0.0
-2025-01-08,10:21:04 | INFO |   lr_cooldown_power: 1.0
-2025-01-08,10:21:04 | INFO |   lr_scheduler: cosine
-2025-01-08,10:21:04 | INFO |   model: ViT-B-32
-2025-01-08,10:21:04 | INFO |   momentum: None
-2025-01-08,10:21:04 | INFO |   name: 2025_01_08-10_21_02-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp
-2025-01-08,10:21:04 | INFO |   no_set_device_rank: False
-2025-01-08,10:21:04 | INFO |   objects_data: /mnt/shared/data/DINO_SAM2_Data/cc3m/
-2025-01-08,10:21:04 | INFO |   objects_sense_format: edges
-2025-01-08,10:21:04 | INFO |   opt: adamw
-2025-01-08,10:21:04 | INFO |   precision: amp
-2025-01-08,10:21:04 | INFO |   pretrained: /mnt/shared/models/open_clip/CLIP-ViT-B-32-laion2B-s34B-b79K/open_clip_pytorch_model.bin
-2025-01-08,10:21:04 | INFO |   pretrained_image: False
-2025-01-08,10:21:04 | INFO |   rank: 0
-2025-01-08,10:21:04 | INFO |   remote_sync: None
-2025-01-08,10:21:04 | INFO |   remote_sync_frequency: 300
-2025-01-08,10:21:04 | INFO |   remote_sync_protocol: s3
-2025-01-08,10:21:04 | INFO |   report_to: tensorboard
-2025-01-08,10:21:04 | INFO |   resume: None
-2025-01-08,10:21:04 | INFO |   save_frequency: 1
-2025-01-08,10:21:04 | INFO |   save_most_recent: False
-2025-01-08,10:21:04 | INFO |   seed: 0
-2025-01-08,10:21:04 | INFO |   siglip: False
-2025-01-08,10:21:04 | INFO |   skip_scheduler: False
-2025-01-08,10:21:04 | INFO |   tensorboard: True
-2025-01-08,10:21:04 | INFO |   tensorboard_path: ./logs/2025_01_08-10_21_02-model_ViT-B-32-lr_1e-05-b_1600-j_6-p_amp/tensorboard
-2025-01-08,10:21:04 | INFO |   torchcompile: False
-2025-01-08,10:21:04 | INFO |   torchscript: False
-2025-01-08,10:21:04 | INFO |   trace: False
-2025-01-08,10:21:04 | INFO |   train_data: /mnt/shared/data/CC3M/cc3m/{00000..00300}.tar
-2025-01-08,10:21:04 | INFO |   train_data_upsampling_factors: None
-2025-01-08,10:21:04 | INFO |   train_num_samples: 6143238
-2025-01-08,10:21:04 | INFO |   use_bn_sync: False
-2025-01-08,10:21:04 | INFO |   use_bnb_linear: None
-2025-01-08,10:21:04 | INFO |   val_data: /mnt/shared/data/CC3M/cc3m/{00324..00331}.tar
-2025-01-08,10:21:04 | INFO |   val_frequency: 1
-2025-01-08,10:21:04 | INFO |   val_num_samples: 120000
-2025-01-08,10:21:04 | INFO |   wandb: False
-2025-01-08,10:21:04 | INFO |   wandb_notes: 
-2025-01-08,10:21:04 | INFO |   wandb_project_name: open-clip
-2025-01-08,10:21:04 | INFO |   warmup: 10000
-2025-01-08,10:21:04 | INFO |   wd: 0.1
-2025-01-08,10:21:04 | INFO |   workers: 6
-2025-01-08,10:21:04 | INFO |   world_size: 1
-2025-01-08,10:21:04 | INFO |   zeroshot_frequency: 1
-2025-01-08,10:21:04 | INFO | Created AdamW (adamw) optimizer: lr: 1e-05, betas: (0.9, 0.98), eps: 1e-06, weight_decay: 0.1, amsgrad: False, foreach: None, maximize: False, capturable: False, differentiable: False, fused: None
-2025-01-08,10:21:05 | INFO | Start epoch 0
-2025-01-08,10:21:23 | INFO | Train Epoch: 0 [   1600/6144000 (0%)] Data (t): 11.456 Batch (t): 17.328, 92.3339/s, 92.3339/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 2.7439 (2.7439) Loss: 2.7439 (2.7439)
-2025-01-08,10:23:25 | INFO | Train Epoch: 0 [ 161600/6144000 (3%)] Data (t): 0.766 Batch (t): 1.218, 1837.11/s, 1837.11/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 2.2335 (2.4887) Loss: 2.2335 (2.4887)
-2025-01-08,10:25:43 | INFO | Train Epoch: 0 [ 321600/6144000 (5%)] Data (t): 0.931 Batch (t): 1.382, 1891.49/s, 1891.49/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.8210 (2.2661) Loss: 1.8210 (2.2661)
-2025-01-08,10:27:51 | INFO | Train Epoch: 0 [ 481600/6144000 (8%)] Data (t): 0.830 Batch (t): 1.281, 412.904/s, 412.904/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.5470 (2.0863) Loss: 1.5470 (2.0863)
-2025-01-08,10:29:58 | INFO | Train Epoch: 0 [ 641600/6144000 (10%)] Data (t): 0.813 Batch (t): 1.268, 1764.34/s, 1764.34/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 1.4100 (1.9511) Loss: 1.4100 (1.9511)
-2025-01-08,10:32:07 | INFO | Train Epoch: 0 [ 801600/6144000 (13%)] Data (t): 0.841 Batch (t): 1.293, 1820.19/s, 1820.19/s/gpu LR: 0.000001 Logit Scale: 99.999 Contrastive_loss: 1.4374 (1.8655) Loss: 1.4374 (1.8655)
-2025-01-08,10:34:09 | INFO | Train Epoch: 0 [ 961600/6144000 (16%)] Data (t): 0.763 Batch (t): 1.215, 1127.70/s, 1127.70/s/gpu LR: 0.000001 Logit Scale: 99.994 Contrastive_loss: 1.3417 (1.7906) Loss: 1.3417 (1.7906)
-2025-01-08,10:36:14 | INFO | Train Epoch: 0 [1121600/6144000 (18%)] Data (t): 0.799 Batch (t): 1.251, 1803.28/s, 1803.28/s/gpu LR: 0.000001 Logit Scale: 99.989 Contrastive_loss: 1.3300 (1.7331) Loss: 1.3300 (1.7331)
-2025-01-08,10:38:18 | INFO | Train Epoch: 0 [1281600/6144000 (21%)] Data (t): 0.793 Batch (t): 1.245, 1848.42/s, 1848.42/s/gpu LR: 0.000001 Logit Scale: 99.985 Contrastive_loss: 1.1713 (1.6706) Loss: 1.1713 (1.6706)
-2025-01-08,10:40:27 | INFO | Train Epoch: 0 [1441600/6144000 (23%)] Data (t): 0.835 Batch (t): 1.288, 1960.25/s, 1960.25/s/gpu LR: 0.000001 Logit Scale: 99.980 Contrastive_loss: 1.2412 (1.6277) Loss: 1.2412 (1.6277)
-2025-01-08,10:42:34 | INFO | Train Epoch: 0 [1601600/6144000 (26%)] Data (t): 0.821 Batch (t): 1.273, 1809.82/s, 1809.82/s/gpu LR: 0.000001 Logit Scale: 99.975 Contrastive_loss: 1.2407 (1.5925) Loss: 1.2407 (1.5925)
-2025-01-08,10:44:39 | INFO | Train Epoch: 0 [1761600/6144000 (29%)] Data (t): 0.794 Batch (t): 1.245, 1805.23/s, 1805.23/s/gpu LR: 0.000001 Logit Scale: 99.971 Contrastive_loss: 1.2440 (1.5635) Loss: 1.2440 (1.5635)
-2025-01-08,10:46:44 | INFO | Train Epoch: 0 [1921600/6144000 (31%)] Data (t): 0.796 Batch (t): 1.249, 1930.04/s, 1930.04/s/gpu LR: 0.000001 Logit Scale: 99.966 Contrastive_loss: 1.2554 (1.5398) Loss: 1.2554 (1.5398)
-2025-01-08,10:48:51 | INFO | Train Epoch: 0 [2081600/6144000 (34%)] Data (t): 0.820 Batch (t): 1.272, 1722.32/s, 1722.32/s/gpu LR: 0.000001 Logit Scale: 99.961 Contrastive_loss: 1.1473 (1.5117) Loss: 1.1473 (1.5117)
-2025-01-08,10:50:55 | INFO | Train Epoch: 0 [2241600/6144000 (36%)] Data (t): 0.789 Batch (t): 1.242, 1954.73/s, 1954.73/s/gpu LR: 0.000001 Logit Scale: 99.956 Contrastive_loss: 1.0872 (1.4834) Loss: 1.0872 (1.4834)
-2025-01-08,10:53:01 | INFO | Train Epoch: 0 [2401600/6144000 (39%)] Data (t): 0.808 Batch (t): 1.260, 1894.45/s, 1894.45/s/gpu LR: 0.000002 Logit Scale: 99.952 Contrastive_loss: 1.1011 (1.4595) Loss: 1.1011 (1.4595)
-2025-01-08,10:55:03 | INFO | Train Epoch: 0 [2561600/6144000 (42%)] Data (t): 0.767 Batch (t): 1.219, 1865.81/s, 1865.81/s/gpu LR: 0.000002 Logit Scale: 99.947 Contrastive_loss: 1.1381 (1.4406) Loss: 1.1381 (1.4406)
-2025-01-08,10:57:01 | INFO | Train Epoch: 0 [2721600/6144000 (44%)] Data (t): 0.724 Batch (t): 1.176, 1637.28/s, 1637.28/s/gpu LR: 0.000002 Logit Scale: 99.943 Contrastive_loss: 1.0821 (1.4207) Loss: 1.0821 (1.4207)
-2025-01-08,10:59:03 | INFO | Train Epoch: 0 [2881600/6144000 (47%)] Data (t): 0.768 Batch (t): 1.220, 609.911/s, 609.911/s/gpu LR: 0.000002 Logit Scale: 99.938 Contrastive_loss: 1.0997 (1.4038) Loss: 1.0997 (1.4038)
-2025-01-08,11:01:00 | INFO | Train Epoch: 0 [3041600/6144000 (50%)] Data (t): 0.721 Batch (t): 1.174, 1761.17/s, 1761.17/s/gpu LR: 0.000002 Logit Scale: 99.934 Contrastive_loss: 1.1066 (1.3890) Loss: 1.1066 (1.3890)
-2025-01-08,11:02:45 | INFO | Train Epoch: 0 [3201600/6144000 (52%)] Data (t): 0.597 Batch (t): 1.048, 1695.56/s, 1695.56/s/gpu LR: 0.000002 Logit Scale: 99.929 Contrastive_loss: 1.0025 (1.3706) Loss: 1.0025 (1.3706)
-2025-01-08,11:04:27 | INFO | Train Epoch: 0 [3361600/6144000 (55%)] Data (t): 0.570 Batch (t): 1.021, 1022.18/s, 1022.18/s/gpu LR: 0.000002 Logit Scale: 99.924 Contrastive_loss: 1.0185 (1.3546) Loss: 1.0185 (1.3546)
-2025-01-08,11:06:07 | INFO | Train Epoch: 0 [3521600/6144000 (57%)] Data (t): 0.547 Batch (t): 0.999, 1976.54/s, 1976.54/s/gpu LR: 0.000002 Logit Scale: 99.921 Contrastive_loss: 0.99475 (1.3389) Loss: 0.99475 (1.3389)
-2025-01-08,11:07:48 | INFO | Train Epoch: 0 [3681600/6144000 (60%)] Data (t): 0.557 Batch (t): 1.009, 1832.28/s, 1832.28/s/gpu LR: 0.000002 Logit Scale: 99.917 Contrastive_loss: 1.0124 (1.3253) Loss: 1.0124 (1.3253)
-2025-01-08,11:09:30 | INFO | Train Epoch: 0 [3841600/6144000 (63%)] Data (t): 0.568 Batch (t): 1.021, 1823.92/s, 1823.92/s/gpu LR: 0.000002 Logit Scale: 99.913 Contrastive_loss: 1.0272 (1.3134) Loss: 1.0272 (1.3134)
-2025-01-08,11:11:10 | INFO | Train Epoch: 0 [4001600/6144000 (65%)] Data (t): 0.547 Batch (t): 0.999, 1859.23/s, 1859.23/s/gpu LR: 0.000003 Logit Scale: 99.908 Contrastive_loss: 1.0184 (1.3020) Loss: 1.0184 (1.3020)
-2025-01-08,11:12:54 | INFO | Train Epoch: 0 [4161600/6144000 (68%)] Data (t): 0.594 Batch (t): 1.046, 1749.91/s, 1749.91/s/gpu LR: 0.000003 Logit Scale: 99.906 Contrastive_loss: 0.98943 (1.2905) Loss: 0.98943 (1.2905)
-2025-01-08,11:14:39 | INFO | Train Epoch: 0 [4321600/6144000 (70%)] Data (t): 0.596 Batch (t): 1.047, 940.103/s, 940.103/s/gpu LR: 0.000003 Logit Scale: 99.902 Contrastive_loss: 0.96515 (1.2788) Loss: 0.96515 (1.2788)
-2025-01-08,11:16:19 | INFO | Train Epoch: 0 [4481600/6144000 (73%)] Data (t): 0.544 Batch (t): 0.995, 2031.48/s, 2031.48/s/gpu LR: 0.000003 Logit Scale: 99.900 Contrastive_loss: 0.96678 (1.2681) Loss: 0.96678 (1.2681)
-2025-01-08,11:17:59 | INFO | Train Epoch: 0 [4641600/6144000 (76%)] Data (t): 0.554 Batch (t): 1.006, 1728.76/s, 1728.76/s/gpu LR: 0.000003 Logit Scale: 99.896 Contrastive_loss: 0.97766 (1.2584) Loss: 0.97766 (1.2584)
-2025-01-08,11:19:42 | INFO | Train Epoch: 0 [4801600/6144000 (78%)] Data (t): 0.579 Batch (t): 1.030, 1720.99/s, 1720.99/s/gpu LR: 0.000003 Logit Scale: 99.891 Contrastive_loss: 0.99483 (1.2499) Loss: 0.99483 (1.2499)
-2025-01-08,11:21:26 | INFO | Train Epoch: 0 [4961600/6144000 (81%)] Data (t): 0.581 Batch (t): 1.033, 1695.66/s, 1695.66/s/gpu LR: 0.000003 Logit Scale: 99.888 Contrastive_loss: 0.97117 (1.2412) Loss: 0.97117 (1.2412)
-2025-01-08,11:23:14 | INFO | Train Epoch: 0 [5121600/6144000 (83%)] Data (t): 0.635 Batch (t): 1.088, 1751.83/s, 1751.83/s/gpu LR: 0.000003 Logit Scale: 99.885 Contrastive_loss: 0.88660 (1.2304) Loss: 0.88660 (1.2304)
-2025-01-08,11:24:55 | INFO | Train Epoch: 0 [5281600/6144000 (86%)] Data (t): 0.553 Batch (t): 1.004, 1672.03/s, 1672.03/s/gpu LR: 0.000003 Logit Scale: 99.882 Contrastive_loss: 0.89932 (1.2207) Loss: 0.89932 (1.2207)
-2025-01-08,11:26:35 | INFO | Train Epoch: 0 [5441600/6144000 (89%)] Data (t): 0.551 Batch (t): 1.003, 1863.10/s, 1863.10/s/gpu LR: 0.000003 Logit Scale: 99.879 Contrastive_loss: 0.85472 (1.2102) Loss: 0.85472 (1.2102)
-2025-01-08,11:28:15 | INFO | Train Epoch: 0 [5601600/6144000 (91%)] Data (t): 0.549 Batch (t): 1.001, 1980.60/s, 1980.60/s/gpu LR: 0.000004 Logit Scale: 99.876 Contrastive_loss: 0.92313 (1.2023) Loss: 0.92313 (1.2023)
-2025-01-08,11:29:54 | INFO | Train Epoch: 0 [5761600/6144000 (94%)] Data (t): 0.536 Batch (t): 0.988, 1684.52/s, 1684.52/s/gpu LR: 0.000004 Logit Scale: 99.874 Contrastive_loss: 0.95288 (1.1955) Loss: 0.95288 (1.1955)
-2025-01-08,11:31:33 | INFO | Train Epoch: 0 [5921600/6144000 (96%)] Data (t): 0.538 Batch (t): 0.990, 1825.79/s, 1825.79/s/gpu LR: 0.000004 Logit Scale: 99.872 Contrastive_loss: 0.84534 (1.1863) Loss: 0.84534 (1.1863)
-2025-01-08,11:33:16 | INFO | Train Epoch: 0 [6081600/6144000 (99%)] Data (t): 0.577 Batch (t): 1.029, 1705.96/s, 1705.96/s/gpu LR: 0.000004 Logit Scale: 99.868 Contrastive_loss: 0.88011 (1.1785) Loss: 0.88011 (1.1785)
-2025-01-08,11:33:55 | INFO | Train Epoch: 0 [6144000/6144000 (100%)] Data (t): 0.554 Batch (t): 1.006, 778.702/s, 778.702/s/gpu LR: 0.000004 Logit Scale: 99.866 Contrastive_loss: 0.89659 (1.1714) Loss: 0.89659 (1.1714)
-2025-01-08,11:33:56 | INFO | Starting zero-shot imagenet.
-2025-01-08,11:33:56 | INFO | Building zero-shot classifier
-  0%|          | 0/1000 [00:00<?, ?it/s]  1%|          | 10/1000 [00:00<00:11, 86.79it/s]  3%|▎         | 30/1000 [00:00<00:09, 102.61it/s]  5%|▌         | 50/1000 [00:00<00:09, 104.12it/s]  7%|▋         | 70/1000 [00:00<00:08, 106.49it/s]  9%|▉         | 90/1000 [00:00<00:07, 118.21it/s] 11%|█         | 110/1000 [00:00<00:06, 128.63it/s] 13%|█▎        | 130/1000 [00:01<00:06, 135.11it/s] 15%|█▌        | 150/1000 [00:01<00:06, 139.03it/s] 17%|█▋        | 170/1000 [00:01<00:05, 141.49it/s] 19%|█▉        | 190/1000 [00:01<00:05, 143.69it/s] 21%|██        | 210/1000 [00:01<00:05, 142.22it/s] 23%|██▎       | 230/1000 [00:01<00:05, 140.42it/s] 25%|██▌       | 250/1000 [00:01<00:05, 142.17it/s] 27%|██▋       | 270/1000 [00:02<00:05, 144.36it/s] 29%|██▉       | 290/1000 [00:02<00:04, 146.85it/s] 31%|███       | 310/1000 [00:02<00:04, 147.91it/s] 33%|███▎      | 330/1000 [00:02<00:04, 148.28it/s] 35%|███▌      | 350/1000 [00:02<00:04, 149.13it/s] 37%|███▋      | 370/1000 [00:02<00:04, 138.62it/s] 39%|███▉      | 390/1000 [00:02<00:04, 140.50it/s] 41%|████      | 410/1000 [00:03<00:04, 140.91it/s] 43%|████▎     | 430/1000 [00:03<00:04, 132.27it/s] 45%|████▌     | 450/1000 [00:03<00:04, 126.48it/s] 47%|████▋     | 470/1000 [00:03<00:04, 119.49it/s] 49%|████▉     | 490/1000 [00:03<00:04, 126.62it/s] 51%|█████     | 510/1000 [00:03<00:03, 130.05it/s] 53%|█████▎    | 530/1000 [00:03<00:03, 134.28it/s] 55%|█████▌    | 550/1000 [00:04<00:03, 129.51it/s] 57%|█████▋    | 570/1000 [00:04<00:03, 131.45it/s] 59%|█████▉    | 590/1000 [00:04<00:03, 136.21it/s] 61%|██████    | 610/1000 [00:04<00:02, 131.92it/s] 63%|██████▎   | 630/1000 [00:04<00:02, 124.96it/s] 65%|██████▌   | 650/1000 [00:04<00:02, 120.59it/s] 67%|██████▋   | 670/1000 [00:05<00:02, 118.97it/s] 69%|██████▉   | 690/1000 [00:05<00:02, 117.77it/s] 71%|███████   | 710/1000 [00:05<00:02, 116.82it/s] 73%|███████▎  | 730/1000 [00:05<00:02, 116.18it/s] 75%|███████▌  | 750/1000 [00:05<00:02, 116.03it/s] 77%|███████▋  | 770/1000 [00:05<00:02, 112.24it/s] 79%|███████▉  | 790/1000 [00:06<00:01, 111.84it/s] 81%|████████  | 810/1000 [00:06<00:01, 111.61it/s] 83%|████████▎ | 830/1000 [00:06<00:01, 111.61it/s] 85%|████████▌ | 850/1000 [00:06<00:01, 111.68it/s] 87%|████████▋ | 870/1000 [00:06<00:01, 108.82it/s] 89%|████████▉ | 890/1000 [00:07<00:01, 108.21it/s] 91%|█████████ | 910/1000 [00:07<00:00, 107.86it/s] 93%|█████████▎| 930/1000 [00:07<00:00, 109.12it/s] 95%|█████████▌| 950/1000 [00:07<00:00, 116.15it/s] 97%|█████████▋| 970/1000 [00:07<00:00, 122.70it/s] 99%|█████████▉| 990/1000 [00:07<00:00, 129.15it/s]100%|██████████| 1000/1000 [00:07<00:00, 125.68it/s]
-2025-01-08,11:34:03 | INFO | Using classifier
-  0%|          | 0/51200 [00:00<?, ?it/s]  3%|▎         | 1600/51200 [00:11<05:44, 144.11it/s]  6%|▋         | 3200/51200 [00:11<02:23, 335.64it/s]  9%|▉         | 4800/51200 [00:11<01:19, 584.01it/s] 12%|█▎        | 6400/51200 [00:12<00:50, 895.07it/s] 16%|█▌        | 8000/51200 [00:12<00:34, 1269.24it/s] 19%|█▉        | 9600/51200 [00:12<00:24, 1698.24it/s] 22%|██▏       | 11200/51200 [00:19<01:11, 561.75it/s] 25%|██▌       | 12800/51200 [00:19<00:49, 777.09it/s] 28%|██▊       | 14400/51200 [00:20<00:35, 1047.88it/s] 31%|███▏      | 16000/51200 [00:21<00:30, 1155.80it/s] 34%|███▍      | 17600/51200 [00:21<00:22, 1498.80it/s] 38%|███▊      | 19200/51200 [00:22<00:17, 1864.18it/s] 41%|████      | 20800/51200 [00:27<00:45, 670.16it/s]  44%|████▍     | 22400/51200 [00:28<00:31, 904.06it/s] 47%|████▋     | 24000/51200 [00:28<00:22, 1189.87it/s] 50%|█████     | 25600/51200 [00:30<00:21, 1168.44it/s] 53%|█████▎    | 27200/51200 [00:30<00:16, 1487.28it/s] 56%|█████▋    | 28800/51200 [00:30<00:12, 1840.23it/s] 59%|█████▉    | 30400/51200 [00:35<00:27, 756.90it/s]  62%|██████▎   | 32000/51200 [00:36<00:19, 1000.62it/s] 66%|██████▌   | 33600/51200 [00:37<00:15, 1150.99it/s] 69%|██████▉   | 35200/51200 [00:38<00:14, 1138.44it/s] 72%|███████▏  | 36800/51200 [00:39<00:09, 1450.35it/s] 75%|███████▌  | 38400/51200 [00:39<00:07, 1786.34it/s] 78%|███████▊  | 40000/51200 [00:44<00:14, 761.73it/s]  81%|████████▏ | 41600/51200 [00:44<00:09, 1005.33it/s] 84%|████████▍ | 43200/51200 [00:46<00:07, 1020.13it/s] 88%|████████▊ | 44800/51200 [00:47<00:05, 1147.65it/s] 91%|█████████ | 46400/51200 [00:47<00:03, 1474.06it/s] 94%|█████████▍| 48000/51200 [00:48<00:01, 1799.57it/s] 97%|█████████▋| 49600/51200 [00:53<00:02, 683.37it/s] 100%|██████████| 51200/51200 [00:54<00:00, 910.89it/s]100%|██████████| 51200/51200 [00:54<00:00, 942.05it/s]
-2025-01-08,11:34:58 | INFO | Finished zero-shot imagenet.
-2025-01-08,11:35:09 | INFO | Eval Epoch: 1 [1600 / 120000]	Clip Loss: 0.992188	
-2025-01-08,11:37:21 | INFO | Eval Epoch: 1 imagenet-zeroshot-val-top1: 0.5317	imagenet-zeroshot-val-top5: 0.7904	image_to_text_mean_rank: 75.6554	image_to_text_median_rank: 3.0000	image_to_text_R@1: 0.3663	image_to_text_R@5: 0.5990	image_to_text_R@10: 0.6876	text_to_image_mean_rank: 137.0594	text_to_image_median_rank: 3.0000	text_to_image_R@1: 0.3532	text_to_image_R@5: 0.5875	text_to_image_R@10: 0.6779	clip_val_loss: 0.9332	epoch: 1.0000	num_samples: 53495.0000
-2025-01-08,11:37:24 | INFO | Start epoch 1
-2025-01-08,11:37:33 | INFO | Train Epoch: 1 [   1600/6144000 (0%)] Data (t): 8.670 Batch (t): 9.128, 175.294/s, 175.294/s/gpu LR: 0.000004 Logit Scale: 99.866 Contrastive_loss: 0.86806 (0.86806) Loss: 0.86806 (0.86806)
-2025-01-08,11:39:28 | INFO | Train Epoch: 1 [ 161600/6144000 (3%)] Data (t): 0.700 Batch (t): 1.152, 1787.72/s, 1787.72/s/gpu LR: 0.000004 Logit Scale: 99.866 Contrastive_loss: 0.83091 (0.84948) Loss: 0.83091 (0.84948)
-2025-01-08,11:41:17 | INFO | Train Epoch: 1 [ 321600/6144000 (5%)] Data (t): 0.634 Batch (t): 1.087, 1716.26/s, 1716.26/s/gpu LR: 0.000004 Logit Scale: 99.866 Contrastive_loss: 0.89295 (0.86397) Loss: 0.89295 (0.86397)
-2025-01-08,11:43:06 | INFO | Train Epoch: 1 [ 481600/6144000 (8%)] Data (t): 0.644 Batch (t): 1.097, 1419.00/s, 1419.00/s/gpu LR: 0.000004 Logit Scale: 99.865 Contrastive_loss: 0.88961 (0.87038) Loss: 0.88961 (0.87038)
-2025-01-08,11:45:00 | INFO | Train Epoch: 1 [ 641600/6144000 (10%)] Data (t): 0.684 Batch (t): 1.136, 1700.68/s, 1700.68/s/gpu LR: 0.000004 Logit Scale: 99.860 Contrastive_loss: 0.75565 (0.84743) Loss: 0.75565 (0.84743)
-2025-01-08,11:46:53 | INFO | Train Epoch: 1 [ 801600/6144000 (13%)] Data (t): 0.681 Batch (t): 1.133, 1870.87/s, 1870.87/s/gpu LR: 0.000004 Logit Scale: 99.858 Contrastive_loss: 0.80862 (0.84097) Loss: 0.80862 (0.84097)
-2025-01-08,11:48:40 | INFO | Train Epoch: 1 [ 961600/6144000 (16%)] Data (t): 0.618 Batch (t): 1.070, 1821.51/s, 1821.51/s/gpu LR: 0.000004 Logit Scale: 99.852 Contrastive_loss: 0.86859 (0.84491) Loss: 0.86859 (0.84491)
-2025-01-08,11:50:30 | INFO | Train Epoch: 1 [1121600/6144000 (18%)] Data (t): 0.647 Batch (t): 1.099, 1743.35/s, 1743.35/s/gpu LR: 0.000005 Logit Scale: 99.848 Contrastive_loss: 0.77490 (0.83616) Loss: 0.77490 (0.83616)
-2025-01-08,11:52:19 | INFO | Train Epoch: 1 [1281600/6144000 (21%)] Data (t): 0.635 Batch (t): 1.088, 740.742/s, 740.742/s/gpu LR: 0.000005 Logit Scale: 99.845 Contrastive_loss: 0.80193 (0.83236) Loss: 0.80193 (0.83236)
-2025-01-08,11:54:09 | INFO | Train Epoch: 1 [1441600/6144000 (23%)] Data (t): 0.651 Batch (t): 1.104, 1925.74/s, 1925.74/s/gpu LR: 0.000005 Logit Scale: 99.843 Contrastive_loss: 0.92835 (0.84196) Loss: 0.92835 (0.84196)
-2025-01-08,11:55:52 | INFO | Train Epoch: 1 [1601600/6144000 (26%)] Data (t): 0.575 Batch (t): 1.027, 1254.46/s, 1254.46/s/gpu LR: 0.000005 Logit Scale: 99.840 Contrastive_loss: 0.89862 (0.84711) Loss: 0.89862 (0.84711)
-2025-01-08,11:57:34 | INFO | Train Epoch: 1 [1761600/6144000 (29%)] Data (t): 0.569 Batch (t): 1.020, 1730.13/s, 1730.13/s/gpu LR: 0.000005 Logit Scale: 99.834 Contrastive_loss: 0.84423 (0.84687) Loss: 0.84423 (0.84687)
-2025-01-08,11:59:18 | INFO | Train Epoch: 1 [1921600/6144000 (31%)] Data (t): 0.589 Batch (t): 1.041, 974.541/s, 974.541/s/gpu LR: 0.000005 Logit Scale: 99.831 Contrastive_loss: 0.80987 (0.84402) Loss: 0.80987 (0.84402)
-2025-01-08,12:01:00 | INFO | Train Epoch: 1 [2081600/6144000 (34%)] Data (t): 0.568 Batch (t): 1.020, 1706.53/s, 1706.53/s/gpu LR: 0.000005 Logit Scale: 99.832 Contrastive_loss: 0.82702 (0.84281) Loss: 0.82702 (0.84281)
-2025-01-08,12:02:42 | INFO | Train Epoch: 1 [2241600/6144000 (36%)] Data (t): 0.569 Batch (t): 1.021, 1842.19/s, 1842.19/s/gpu LR: 0.000005 Logit Scale: 99.835 Contrastive_loss: 0.78514 (0.83896) Loss: 0.78514 (0.83896)
-2025-01-08,12:04:24 | INFO | Train Epoch: 1 [2401600/6144000 (39%)] Data (t): 0.568 Batch (t): 1.022, 1083.82/s, 1083.82/s/gpu LR: 0.000005 Logit Scale: 99.837 Contrastive_loss: 0.66485 (0.82808) Loss: 0.66485 (0.82808)
-2025-01-08,12:06:04 | INFO | Train Epoch: 1 [2561600/6144000 (42%)] Data (t): 0.540 Batch (t): 0.992, 1762.03/s, 1762.03/s/gpu LR: 0.000005 Logit Scale: 99.837 Contrastive_loss: 0.78361 (0.82546) Loss: 0.78361 (0.82546)
-2025-01-08,12:07:42 | INFO | Train Epoch: 1 [2721600/6144000 (44%)] Data (t): 0.536 Batch (t): 0.988, 1871.43/s, 1871.43/s/gpu LR: 0.000006 Logit Scale: 99.838 Contrastive_loss: 0.79190 (0.82360) Loss: 0.79190 (0.82360)
-2025-01-08,12:09:25 | INFO | Train Epoch: 1 [2881600/6144000 (47%)] Data (t): 0.577 Batch (t): 1.028, 871.424/s, 871.424/s/gpu LR: 0.000006 Logit Scale: 99.835 Contrastive_loss: 0.74096 (0.81925) Loss: 0.74096 (0.81925)
-2025-01-08,12:11:06 | INFO | Train Epoch: 1 [3041600/6144000 (50%)] Data (t): 0.551 Batch (t): 1.003, 1889.02/s, 1889.02/s/gpu LR: 0.000006 Logit Scale: 99.829 Contrastive_loss: 0.79029 (0.81780) Loss: 0.79029 (0.81780)
-2025-01-08,12:12:48 | INFO | Train Epoch: 1 [3201600/6144000 (52%)] Data (t): 0.577 Batch (t): 1.029, 1894.10/s, 1894.10/s/gpu LR: 0.000006 Logit Scale: 99.824 Contrastive_loss: 0.78280 (0.81614) Loss: 0.78280 (0.81614)
-2025-01-08,12:14:30 | INFO | Train Epoch: 1 [3361600/6144000 (55%)] Data (t): 0.567 Batch (t): 1.020, 1692.40/s, 1692.40/s/gpu LR: 0.000006 Logit Scale: 99.823 Contrastive_loss: 0.76627 (0.81387) Loss: 0.76627 (0.81387)
-2025-01-08,12:16:11 | INFO | Train Epoch: 1 [3521600/6144000 (57%)] Data (t): 0.551 Batch (t): 1.004, 1826.93/s, 1826.93/s/gpu LR: 0.000006 Logit Scale: 99.825 Contrastive_loss: 0.70888 (0.80930) Loss: 0.70888 (0.80930)
-2025-01-08,12:17:53 | INFO | Train Epoch: 1 [3681600/6144000 (60%)] Data (t): 0.572 Batch (t): 1.024, 1713.40/s, 1713.40/s/gpu LR: 0.000006 Logit Scale: 99.821 Contrastive_loss: 0.70409 (0.80492) Loss: 0.70409 (0.80492)
-2025-01-08,12:19:34 | INFO | Train Epoch: 1 [3841600/6144000 (63%)] Data (t): 0.558 Batch (t): 1.010, 1830.35/s, 1830.35/s/gpu LR: 0.000006 Logit Scale: 99.816 Contrastive_loss: 0.78808 (0.80425) Loss: 0.78808 (0.80425)
-2025-01-08,12:21:15 | INFO | Train Epoch: 1 [4001600/6144000 (65%)] Data (t): 0.554 Batch (t): 1.007, 1721.23/s, 1721.23/s/gpu LR: 0.000006 Logit Scale: 99.816 Contrastive_loss: 0.74816 (0.80209) Loss: 0.74816 (0.80209)
-2025-01-08,12:22:59 | INFO | Train Epoch: 1 [4161600/6144000 (68%)] Data (t): 0.588 Batch (t): 1.040, 1770.02/s, 1770.02/s/gpu LR: 0.000006 Logit Scale: 99.818 Contrastive_loss: 0.70630 (0.79854) Loss: 0.70630 (0.79854)
-2025-01-08,12:24:42 | INFO | Train Epoch: 1 [4321600/6144000 (70%)] Data (t): 0.578 Batch (t): 1.032, 1857.58/s, 1857.58/s/gpu LR: 0.000007 Logit Scale: 99.823 Contrastive_loss: 0.70048 (0.79504) Loss: 0.70048 (0.79504)
-2025-01-08,12:26:24 | INFO | Train Epoch: 1 [4481600/6144000 (73%)] Data (t): 0.566 Batch (t): 1.019, 1938.92/s, 1938.92/s/gpu LR: 0.000007 Logit Scale: 99.827 Contrastive_loss: 0.60934 (0.78864) Loss: 0.60934 (0.78864)
-2025-01-08,12:28:04 | INFO | Train Epoch: 1 [4641600/6144000 (76%)] Data (t): 0.553 Batch (t): 1.005, 1926.92/s, 1926.92/s/gpu LR: 0.000007 Logit Scale: 99.828 Contrastive_loss: 0.69972 (0.78567) Loss: 0.69972 (0.78567)
-2025-01-08,12:29:45 | INFO | Train Epoch: 1 [4801600/6144000 (78%)] Data (t): 0.557 Batch (t): 1.009, 1130.93/s, 1130.93/s/gpu LR: 0.000007 Logit Scale: 99.827 Contrastive_loss: 0.69203 (0.78265) Loss: 0.69203 (0.78265)
-2025-01-08,12:31:26 | INFO | Train Epoch: 1 [4961600/6144000 (81%)] Data (t): 0.559 Batch (t): 1.011, 1752.97/s, 1752.97/s/gpu LR: 0.000007 Logit Scale: 99.826 Contrastive_loss: 0.64273 (0.77828) Loss: 0.64273 (0.77828)
-2025-01-08,12:33:08 | INFO | Train Epoch: 1 [5121600/6144000 (83%)] Data (t): 0.559 Batch (t): 1.011, 1772.84/s, 1772.84/s/gpu LR: 0.000007 Logit Scale: 99.828 Contrastive_loss: 0.57817 (0.77222) Loss: 0.57817 (0.77222)
-2025-01-08,12:34:51 | INFO | Train Epoch: 1 [5281600/6144000 (86%)] Data (t): 0.577 Batch (t): 1.031, 1253.89/s, 1253.89/s/gpu LR: 0.000007 Logit Scale: 99.831 Contrastive_loss: 0.68991 (0.76979) Loss: 0.68991 (0.76979)
-2025-01-08,12:36:32 | INFO | Train Epoch: 1 [5441600/6144000 (89%)] Data (t): 0.557 Batch (t): 1.010, 1809.41/s, 1809.41/s/gpu LR: 0.000007 Logit Scale: 99.830 Contrastive_loss: 0.65420 (0.76649) Loss: 0.65420 (0.76649)
-2025-01-08,12:38:13 | INFO | Train Epoch: 1 [5601600/6144000 (91%)] Data (t): 0.564 Batch (t): 1.016, 1780.27/s, 1780.27/s/gpu LR: 0.000007 Logit Scale: 99.834 Contrastive_loss: 0.70223 (0.76471) Loss: 0.70223 (0.76471)
-2025-01-08,12:39:53 | INFO | Train Epoch: 1 [5761600/6144000 (94%)] Data (t): 0.546 Batch (t): 0.998, 1780.02/s, 1780.02/s/gpu LR: 0.000007 Logit Scale: 99.830 Contrastive_loss: 0.63867 (0.76130) Loss: 0.63867 (0.76130)
-2025-01-08,12:41:32 | INFO | Train Epoch: 1 [5921600/6144000 (96%)] Data (t): 0.536 Batch (t): 0.988, 1834.41/s, 1834.41/s/gpu LR: 0.000008 Logit Scale: 99.829 Contrastive_loss: 0.66107 (0.75866) Loss: 0.66107 (0.75866)
-2025-01-08,12:43:12 | INFO | Train Epoch: 1 [6081600/6144000 (99%)] Data (t): 0.550 Batch (t): 1.002, 1847.41/s, 1847.41/s/gpu LR: 0.000008 Logit Scale: 99.828 Contrastive_loss: 0.62993 (0.75536) Loss: 0.62993 (0.75536)
-2025-01-08,12:43:54 | INFO | Train Epoch: 1 [6144000/6144000 (100%)] Data (t): 0.622 Batch (t): 1.075, 1783.42/s, 1783.42/s/gpu LR: 0.000008 Logit Scale: 99.830 Contrastive_loss: 0.57850 (0.75094) Loss: 0.57850 (0.75094)
-2025-01-08,12:43:54 | INFO | Starting zero-shot imagenet.
-2025-01-08,12:43:54 | INFO | Building zero-shot classifier
-  0%|          | 0/1000 [00:00<?, ?it/s]  2%|▏         | 20/1000 [00:00<00:08, 113.59it/s]  4%|▍         | 40/1000 [00:00<00:07, 124.21it/s]  6%|▌         | 60/1000 [00:00<00:07, 121.46it/s]  8%|▊         | 80/1000 [00:00<00:07, 116.27it/s] 10%|█         | 100/1000 [00:00<00:07, 125.98it/s] 12%|█▏        | 120/1000 [00:00<00:07, 125.66it/s] 14%|█▍        | 140/1000 [00:01<00:07, 122.44it/s] 16%|█▌        | 160/1000 [00:01<00:06, 124.32it/s] 18%|█▊        | 180/1000 [00:01<00:06, 128.72it/s] 20%|██        | 200/1000 [00:01<00:06, 125.51it/s] 22%|██▏       | 220/1000 [00:01<00:06, 123.24it/s] 24%|██▍       | 240/1000 [00:01<00:05, 130.65it/s] 26%|██▌       | 260/1000 [00:02<00:05, 136.45it/s] 28%|██▊       | 280/1000 [00:02<00:05, 140.01it/s] 30%|███       | 300/1000 [00:02<00:04, 143.62it/s] 32%|███▏      | 320/1000 [00:02<00:04, 144.86it/s] 34%|███▍      | 340/1000 [00:02<00:04, 145.35it/s] 36%|███▌      | 360/1000 [00:02<00:04, 145.07it/s] 38%|███▊      | 380/1000 [00:02<00:04, 147.02it/s] 40%|████      | 400/1000 [00:02<00:04, 144.87it/s] 42%|████▏     | 420/1000 [00:03<00:03, 147.31it/s] 44%|████▍     | 440/1000 [00:03<00:03, 148.18it/s] 46%|████▌     | 460/1000 [00:03<00:03, 149.66it/s] 48%|████▊     | 480/1000 [00:03<00:03, 146.50it/s] 50%|█████     | 500/1000 [00:03<00:03, 145.91it/s] 52%|█████▏    | 520/1000 [00:03<00:03, 147.42it/s] 54%|█████▍    | 540/1000 [00:03<00:03, 147.49it/s] 56%|█████▌    | 560/1000 [00:04<00:02, 148.78it/s] 58%|█████▊    | 580/1000 [00:04<00:02, 148.33it/s] 60%|██████    | 600/1000 [00:04<00:02, 146.94it/s] 62%|██████▏   | 620/1000 [00:04<00:02, 148.53it/s] 64%|██████▍   | 640/1000 [00:04<00:02, 146.04it/s] 66%|██████▌   | 660/1000 [00:04<00:02, 136.24it/s] 68%|██████▊   | 680/1000 [00:04<00:02, 130.05it/s] 70%|███████   | 700/1000 [00:05<00:02, 125.68it/s] 72%|███████▏  | 720/1000 [00:05<00:02, 122.96it/s] 74%|███████▍  | 740/1000 [00:05<00:02, 121.05it/s] 76%|███████▌  | 760/1000 [00:05<00:01, 120.01it/s] 78%|███████▊  | 780/1000 [00:05<00:01, 117.64it/s] 80%|████████  | 800/1000 [00:05<00:01, 126.27it/s] 82%|████████▏ | 820/1000 [00:06<00:01, 133.49it/s] 84%|████████▍ | 840/1000 [00:06<00:01, 139.44it/s] 86%|████████▌ | 860/1000 [00:06<00:00, 141.15it/s] 88%|████████▊ | 880/1000 [00:06<00:00, 144.26it/s] 90%|█████████ | 900/1000 [00:06<00:00, 137.77it/s] 92%|█████████▏| 920/1000 [00:06<00:00, 132.85it/s] 94%|█████████▍| 940/1000 [00:06<00:00, 136.10it/s] 96%|█████████▌| 960/1000 [00:07<00:00, 139.53it/s] 98%|█████████▊| 980/1000 [00:07<00:00, 140.52it/s]100%|██████████| 1000/1000 [00:07<00:00, 131.86it/s]100%|██████████| 1000/1000 [00:07<00:00, 135.31it/s]
-2025-01-08,12:44:02 | INFO | Using classifier
-  0%|          | 0/51200 [00:00<?, ?it/s]  3%|▎         | 1600/51200 [00:08<04:09, 199.11it/s]  6%|▋         | 3200/51200 [00:09<02:00, 396.82it/s]  9%|▉         | 4800/51200 [00:09<01:09, 670.26it/s] 12%|█▎        | 6400/51200 [00:10<00:45, 987.71it/s] 16%|█▌        | 8000/51200 [00:10<00:32, 1336.59it/s] 19%|█▉        | 9600/51200 [00:11<00:24, 1712.25it/s] 22%|██▏       | 11200/51200 [00:15<00:48, 816.54it/s] 25%|██▌       | 12800/51200 [00:15<00:38, 1005.70it/s] 28%|██▊       | 14400/51200 [00:16<00:28, 1313.38it/s] 31%|███▏      | 16000/51200 [00:16<00:21, 1634.54it/s] 34%|███▍      | 17600/51200 [00:17<00:17, 1963.05it/s] 38%|███▊      | 19200/51200 [00:17<00:14, 2258.85it/s] 41%|████      | 20800/51200 [00:22<00:38, 789.60it/s]  44%|████▍     | 22400/51200 [00:23<00:27, 1043.37it/s] 47%|████▋     | 24000/51200 [00:23<00:20, 1353.90it/s] 50%|█████     | 25600/51200 [00:23<00:15, 1703.97it/s] 53%|█████▎    | 27200/51200 [00:24<00:11, 2093.43it/s] 56%|█████▋    | 28800/51200 [00:24<00:09, 2483.40it/s] 59%|█████▉    | 30400/51200 [00:29<00:24, 835.89it/s]  62%|██████▎   | 32000/51200 [00:29<00:17, 1099.22it/s] 66%|██████▌   | 33600/51200 [00:30<00:12, 1401.50it/s] 69%|██████▉   | 35200/51200 [00:30<00:09, 1716.09it/s] 72%|███████▏  | 36800/51200 [00:31<00:07, 2041.95it/s] 75%|███████▌  | 38400/51200 [00:31<00:05, 2346.89it/s] 78%|███████▊  | 40000/51200 [00:35<00:12, 902.26it/s]  81%|████████▏ | 41600/51200 [00:36<00:08, 1162.31it/s] 84%|████████▍ | 43200/51200 [00:36<00:05, 1452.92it/s] 88%|████████▊ | 44800/51200 [00:37<00:03, 1780.51it/s] 91%|█████████ | 46400/51200 [00:37<00:02, 2081.43it/s] 94%|█████████▍| 48000/51200 [00:38<00:01, 2391.99it/s] 97%|█████████▋| 49600/51200 [00:42<00:01, 865.04it/s] 100%|██████████| 51200/51200 [00:42<00:00, 1182.33it/s]100%|██████████| 51200/51200 [00:43<00:00, 1189.06it/s]
-2025-01-08,12:44:45 | INFO | Finished zero-shot imagenet.
-2025-01-08,12:44:53 | INFO | Eval Epoch: 2 [1600 / 120000]	Clip Loss: 0.923481	
-2025-01-08,12:46:46 | INFO | Eval Epoch: 2 imagenet-zeroshot-val-top1: 0.5040	imagenet-zeroshot-val-top5: 0.7656	image_to_text_mean_rank: 70.0055	image_to_text_median_rank: 3.0000	image_to_text_R@1: 0.3752	image_to_text_R@5: 0.6198	image_to_text_R@10: 0.7091	text_to_image_mean_rank: 127.1050	text_to_image_median_rank: 3.0000	text_to_image_R@1: 0.3635	text_to_image_R@5: 0.6092	text_to_image_R@10: 0.7017	clip_val_loss: 0.8799	epoch: 2.0000	num_samples: 53495.0000
-2025-01-08,12:46:48 | INFO | Start epoch 2
-2025-01-08,12:46:57 | INFO | Train Epoch: 2 [   1600/6144000 (0%)] Data (t): 8.462 Batch (t): 8.912, 179.531/s, 179.531/s/gpu LR: 0.000008 Logit Scale: 99.830 Contrastive_loss: 0.55873 (0.55873) Loss: 0.55873 (0.55873)
-2025-01-08,12:48:47 | INFO | Train Epoch: 2 [ 161600/6144000 (3%)] Data (t): 0.648 Batch (t): 1.100, 1803.32/s, 1803.32/s/gpu LR: 0.000008 Logit Scale: 99.849 Contrastive_loss: 0.56615 (0.56244) Loss: 0.56615 (0.56244)
-2025-01-08,12:50:37 | INFO | Train Epoch: 2 [ 321600/6144000 (5%)] Data (t): 0.644 Batch (t): 1.095, 1423.33/s, 1423.33/s/gpu LR: 0.000008 Logit Scale: 99.856 Contrastive_loss: 0.58884 (0.57124) Loss: 0.58884 (0.57124)
-2025-01-08,12:52:26 | INFO | Train Epoch: 2 [ 481600/6144000 (8%)] Data (t): 0.638 Batch (t): 1.089, 946.195/s, 946.195/s/gpu LR: 0.000008 Logit Scale: 99.858 Contrastive_loss: 0.59317 (0.57672) Loss: 0.59317 (0.57672)
-2025-01-08,12:54:16 | INFO | Train Epoch: 2 [ 641600/6144000 (10%)] Data (t): 0.646 Batch (t): 1.098, 1651.55/s, 1651.55/s/gpu LR: 0.000008 Logit Scale: 99.859 Contrastive_loss: 0.57908 (0.57719) Loss: 0.57908 (0.57719)
-2025-01-08,12:56:05 | INFO | Train Epoch: 2 [ 801600/6144000 (13%)] Data (t): 0.646 Batch (t): 1.098, 1788.06/s, 1788.06/s/gpu LR: 0.000008 Logit Scale: 99.862 Contrastive_loss: 0.60365 (0.58160) Loss: 0.60365 (0.58160)
-2025-01-08,12:57:56 | INFO | Train Epoch: 2 [ 961600/6144000 (16%)] Data (t): 0.650 Batch (t): 1.102, 1385.59/s, 1385.59/s/gpu LR: 0.000008 Logit Scale: 99.862 Contrastive_loss: 0.59078 (0.58292) Loss: 0.59078 (0.58292)
-2025-01-08,12:59:47 | INFO | Train Epoch: 2 [1121600/6144000 (18%)] Data (t): 0.660 Batch (t): 1.112, 1663.62/s, 1663.62/s/gpu LR: 0.000008 Logit Scale: 99.861 Contrastive_loss: 0.56721 (0.58095) Loss: 0.56721 (0.58095)
-2025-01-08,13:01:37 | INFO | Train Epoch: 2 [1281600/6144000 (21%)] Data (t): 0.648 Batch (t): 1.101, 1712.26/s, 1712.26/s/gpu LR: 0.000008 Logit Scale: 99.858 Contrastive_loss: 0.58362 (0.58125) Loss: 0.58362 (0.58125)
-2025-01-08,13:03:27 | INFO | Train Epoch: 2 [1441600/6144000 (23%)] Data (t): 0.652 Batch (t): 1.104, 765.883/s, 765.883/s/gpu LR: 0.000009 Logit Scale: 99.854 Contrastive_loss: 0.61137 (0.58426) Loss: 0.61137 (0.58426)
-2025-01-08,13:05:15 | INFO | Train Epoch: 2 [1601600/6144000 (26%)] Data (t): 0.629 Batch (t): 1.081, 1677.16/s, 1677.16/s/gpu LR: 0.000009 Logit Scale: 99.854 Contrastive_loss: 0.53207 (0.57952) Loss: 0.53207 (0.57952)
-2025-01-08,13:07:09 | INFO | Train Epoch: 2 [1761600/6144000 (29%)] Data (t): 0.680 Batch (t): 1.133, 1783.69/s, 1783.69/s/gpu LR: 0.000009 Logit Scale: 99.851 Contrastive_loss: 0.60573 (0.58170) Loss: 0.60573 (0.58170)
-2025-01-08,13:09:00 | INFO | Train Epoch: 2 [1921600/6144000 (31%)] Data (t): 0.662 Batch (t): 1.114, 605.069/s, 605.069/s/gpu LR: 0.000009 Logit Scale: 99.851 Contrastive_loss: 0.59562 (0.58277) Loss: 0.59562 (0.58277)
-2025-01-08,13:10:44 | INFO | Train Epoch: 2 [2081600/6144000 (34%)] Data (t): 0.589 Batch (t): 1.041, 1774.74/s, 1774.74/s/gpu LR: 0.000009 Logit Scale: 99.855 Contrastive_loss: 0.52010 (0.57830) Loss: 0.52010 (0.57830)
-2025-01-08,13:12:28 | INFO | Train Epoch: 2 [2241600/6144000 (36%)] Data (t): 0.590 Batch (t): 1.042, 1690.27/s, 1690.27/s/gpu LR: 0.000009 Logit Scale: 99.877 Contrastive_loss: 0.51510 (0.57408) Loss: 0.51510 (0.57408)
-2025-01-08,13:14:08 | INFO | Train Epoch: 2 [2401600/6144000 (39%)] Data (t): 0.541 Batch (t): 0.993, 1756.36/s, 1756.36/s/gpu LR: 0.000009 Logit Scale: 99.890 Contrastive_loss: 0.53449 (0.57161) Loss: 0.53449 (0.57161)
-2025-01-08,13:15:36 | INFO | Train Epoch: 2 [2561600/6144000 (42%)] Data (t): 0.431 Batch (t): 0.882, 1691.70/s, 1691.70/s/gpu LR: 0.000009 Logit Scale: 99.897 Contrastive_loss: 0.48186 (0.56633) Loss: 0.48186 (0.56633)
-2025-01-08,13:17:07 | INFO | Train Epoch: 2 [2721600/6144000 (44%)] Data (t): 0.460 Batch (t): 0.913, 1706.47/s, 1706.47/s/gpu LR: 0.000009 Logit Scale: 99.903 Contrastive_loss: 0.51428 (0.56344) Loss: 0.51428 (0.56344)
-2025-01-08,13:18:38 | INFO | Train Epoch: 2 [2881600/6144000 (47%)] Data (t): 0.451 Batch (t): 0.903, 1700.84/s, 1700.84/s/gpu LR: 0.000009 Logit Scale: 99.908 Contrastive_loss: 0.50474 (0.56035) Loss: 0.50474 (0.56035)
-2025-01-08,13:20:06 | INFO | Train Epoch: 2 [3041600/6144000 (50%)] Data (t): 0.428 Batch (t): 0.879, 1691.21/s, 1691.21/s/gpu LR: 0.000010 Logit Scale: 99.914 Contrastive_loss: 0.53552 (0.55911) Loss: 0.53552 (0.55911)
-2025-01-08,13:21:34 | INFO | Train Epoch: 2 [3201600/6144000 (52%)] Data (t): 0.432 Batch (t): 0.884, 1949.10/s, 1949.10/s/gpu LR: 0.000010 Logit Scale: 99.916 Contrastive_loss: 0.47629 (0.55516) Loss: 0.47629 (0.55516)
-2025-01-08,13:23:04 | INFO | Train Epoch: 2 [3361600/6144000 (55%)] Data (t): 0.450 Batch (t): 0.902, 1879.99/s, 1879.99/s/gpu LR: 0.000010 Logit Scale: 99.916 Contrastive_loss: 0.52475 (0.55378) Loss: 0.52475 (0.55378)
-2025-01-08,13:24:33 | INFO | Train Epoch: 2 [3521600/6144000 (57%)] Data (t): 0.440 Batch (t): 0.892, 1771.56/s, 1771.56/s/gpu LR: 0.000010 Logit Scale: 99.922 Contrastive_loss: 0.48313 (0.55071) Loss: 0.48313 (0.55071)
-2025-01-08,13:26:03 | INFO | Train Epoch: 2 [3681600/6144000 (60%)] Data (t): 0.442 Batch (t): 0.894, 1720.47/s, 1720.47/s/gpu LR: 0.000010 Logit Scale: 99.929 Contrastive_loss: 0.50909 (0.54897) Loss: 0.50909 (0.54897)
-2025-01-08,13:27:32 | INFO | Train Epoch: 2 [3841600/6144000 (63%)] Data (t): 0.444 Batch (t): 0.896, 1918.66/s, 1918.66/s/gpu LR: 0.000010 Logit Scale: 99.932 Contrastive_loss: 0.50537 (0.54723) Loss: 0.50537 (0.54723)
-2025-01-08,13:29:02 | INFO | Train Epoch: 2 [4001600/6144000 (65%)] Data (t): 0.446 Batch (t): 0.898, 1845.92/s, 1845.92/s/gpu LR: 0.000010 Logit Scale: 99.941 Contrastive_loss: 0.54442 (0.54712) Loss: 0.54442 (0.54712)
-2025-01-08,13:30:32 | INFO | Train Epoch: 2 [4161600/6144000 (68%)] Data (t): 0.450 Batch (t): 0.902, 1660.40/s, 1660.40/s/gpu LR: 0.000010 Logit Scale: 99.953 Contrastive_loss: 0.49127 (0.54505) Loss: 0.49127 (0.54505)
-2025-01-08,13:32:01 | INFO | Train Epoch: 2 [4321600/6144000 (70%)] Data (t): 0.437 Batch (t): 0.888, 1954.33/s, 1954.33/s/gpu LR: 0.000010 Logit Scale: 99.974 Contrastive_loss: 0.38295 (0.53926) Loss: 0.38295 (0.53926)
-2025-01-08,13:33:29 | INFO | Train Epoch: 2 [4481600/6144000 (73%)] Data (t): 0.431 Batch (t): 0.883, 1851.69/s, 1851.69/s/gpu LR: 0.000010 Logit Scale: 99.993 Contrastive_loss: 0.42855 (0.53545) Loss: 0.42855 (0.53545)
-2025-01-08,13:34:58 | INFO | Train Epoch: 2 [4641600/6144000 (76%)] Data (t): 0.435 Batch (t): 0.886, 1722.12/s, 1722.12/s/gpu LR: 0.000010 Logit Scale: 100.000 Contrastive_loss: 0.39757 (0.53085) Loss: 0.39757 (0.53085)
-2025-01-08,13:36:26 | INFO | Train Epoch: 2 [4801600/6144000 (78%)] Data (t): 0.433 Batch (t): 0.885, 1921.96/s, 1921.96/s/gpu LR: 0.000010 Logit Scale: 100.000 Contrastive_loss: 0.46097 (0.52860) Loss: 0.46097 (0.52860)
-2025-01-08,13:37:54 | INFO | Train Epoch: 2 [4961600/6144000 (81%)] Data (t): 0.427 Batch (t): 0.879, 1904.54/s, 1904.54/s/gpu LR: 0.000009 Logit Scale: 100.000 Contrastive_loss: 0.43280 (0.52560) Loss: 0.43280 (0.52560)
-2025-01-08,13:39:26 | INFO | Train Epoch: 2 [5121600/6144000 (83%)] Data (t): 0.460 Batch (t): 0.913, 1646.99/s, 1646.99/s/gpu LR: 0.000009 Logit Scale: 100.000 Contrastive_loss: 0.43044 (0.52272) Loss: 0.43044 (0.52272)
-2025-01-08,13:40:55 | INFO | Train Epoch: 2 [5281600/6144000 (86%)] Data (t): 0.439 Batch (t): 0.891, 1922.28/s, 1922.28/s/gpu LR: 0.000009 Logit Scale: 99.999 Contrastive_loss: 0.41691 (0.51961) Loss: 0.41691 (0.51961)
-2025-01-08,13:42:25 | INFO | Train Epoch: 2 [5441600/6144000 (89%)] Data (t): 0.450 Batch (t): 0.902, 1815.55/s, 1815.55/s/gpu LR: 0.000009 Logit Scale: 100.000 Contrastive_loss: 0.40659 (0.51638) Loss: 0.40659 (0.51638)
-2025-01-08,13:43:53 | INFO | Train Epoch: 2 [5601600/6144000 (91%)] Data (t): 0.428 Batch (t): 0.879, 1675.71/s, 1675.71/s/gpu LR: 0.000009 Logit Scale: 100.000 Contrastive_loss: 0.42863 (0.51394) Loss: 0.42863 (0.51394)
-2025-01-08,13:45:22 | INFO | Train Epoch: 2 [5761600/6144000 (94%)] Data (t): 0.441 Batch (t): 0.892, 1934.75/s, 1934.75/s/gpu LR: 0.000009 Logit Scale: 99.998 Contrastive_loss: 0.42196 (0.51145) Loss: 0.42196 (0.51145)
-2025-01-08,13:46:50 | INFO | Train Epoch: 2 [5921600/6144000 (96%)] Data (t): 0.431 Batch (t): 0.882, 1890.63/s, 1890.63/s/gpu LR: 0.000008 Logit Scale: 100.000 Contrastive_loss: 0.39201 (0.50831) Loss: 0.39201 (0.50831)
-2025-01-08,13:48:21 | INFO | Train Epoch: 2 [6081600/6144000 (99%)] Data (t): 0.457 Batch (t): 0.909, 1708.32/s, 1708.32/s/gpu LR: 0.000008 Logit Scale: 100.000 Contrastive_loss: 0.38483 (0.50514) Loss: 0.38483 (0.50514)
-2025-01-08,13:48:56 | INFO | Train Epoch: 2 [6144000/6144000 (100%)] Data (t): 0.443 Batch (t): 0.895, 1835.89/s, 1835.89/s/gpu LR: 0.000008 Logit Scale: 100.000 Contrastive_loss: 0.31914 (0.50049) Loss: 0.31914 (0.50049)
-2025-01-08,13:48:56 | INFO | Starting zero-shot imagenet.
-2025-01-08,13:48:56 | INFO | Building zero-shot classifier
-  0%|          | 0/1000 [00:00<?, ?it/s]  2%|▏         | 20/1000 [00:00<00:08, 121.05it/s]  4%|▍         | 40/1000 [00:00<00:08, 117.43it/s]  6%|▌         | 60/1000 [00:00<00:08, 108.92it/s]  8%|▊         | 80/1000 [00:00<00:08, 109.29it/s] 10%|█         | 100/1000 [00:00<00:08, 112.12it/s] 12%|█▏        | 120/1000 [00:01<00:07, 114.34it/s] 14%|█▍        | 140/1000 [00:01<00:07, 113.53it/s] 16%|█▌        | 160/1000 [00:01<00:07, 114.61it/s] 18%|█▊        | 180/1000 [00:01<00:07, 113.41it/s] 20%|██        | 200/1000 [00:01<00:07, 113.80it/s] 22%|██▏       | 220/1000 [00:01<00:07, 111.24it/s] 24%|██▍       | 240/1000 [00:02<00:06, 112.09it/s] 26%|██▌       | 260/1000 [00:02<00:06, 111.91it/s] 28%|██▊       | 280/1000 [00:02<00:06, 111.79it/s] 30%|███       | 300/1000 [00:02<00:05, 117.87it/s] 32%|███▏      | 320/1000 [00:02<00:05, 126.13it/s] 34%|███▍      | 340/1000 [00:02<00:05, 119.72it/s] 36%|███▌      | 360/1000 [00:03<00:05, 118.33it/s] 38%|███▊      | 380/1000 [00:03<00:05, 116.39it/s] 40%|████      | 400/1000 [00:03<00:05, 112.95it/s] 42%|████▏     | 420/1000 [00:03<00:05, 112.96it/s] 44%|████▍     | 440/1000 [00:03<00:05, 111.09it/s] 46%|████▌     | 460/1000 [00:04<00:04, 110.89it/s] 48%|████▊     | 480/1000 [00:04<00:04, 109.17it/s] 50%|█████     | 500/1000 [00:04<00:04, 110.52it/s] 52%|█████▏    | 520/1000 [00:04<00:04, 110.84it/s] 54%|█████▍    | 540/1000 [00:04<00:04, 113.10it/s] 56%|█████▌    | 560/1000 [00:04<00:03, 112.39it/s] 58%|█████▊    | 580/1000 [00:05<00:03, 113.68it/s] 60%|██████    | 600/1000 [00:05<00:03, 113.60it/s] 62%|██████▏   | 620/1000 [00:05<00:03, 122.82it/s] 64%|██████▍   | 640/1000 [00:05<00:03, 119.05it/s] 66%|██████▌   | 660/1000 [00:05<00:02, 118.71it/s] 68%|██████▊   | 680/1000 [00:05<00:02, 116.92it/s] 70%|███████   | 700/1000 [00:06<00:02, 123.79it/s] 72%|███████▏  | 720/1000 [00:06<00:02, 134.22it/s] 74%|███████▍  | 740/1000 [00:06<00:01, 141.58it/s] 76%|███████▌  | 760/1000 [00:06<00:01, 148.40it/s] 78%|███████▊  | 780/1000 [00:06<00:01, 153.44it/s] 80%|████████  | 800/1000 [00:06<00:01, 156.85it/s] 82%|████████▏ | 820/1000 [00:06<00:01, 153.69it/s] 84%|████████▍ | 840/1000 [00:06<00:01, 140.39it/s] 86%|████████▌ | 860/1000 [00:07<00:01, 132.58it/s] 88%|████████▊ | 880/1000 [00:07<00:00, 125.45it/s] 90%|█████████ | 900/1000 [00:07<00:00, 123.13it/s] 92%|█████████▏| 920/1000 [00:07<00:00, 118.15it/s] 94%|█████████▍| 940/1000 [00:07<00:00, 116.78it/s] 96%|█████████▌| 960/1000 [00:08<00:00, 111.94it/s] 98%|█████████▊| 980/1000 [00:08<00:00, 124.56it/s]100%|██████████| 1000/1000 [00:08<00:00, 134.05it/s]100%|██████████| 1000/1000 [00:08<00:00, 120.36it/s]
-2025-01-08,13:49:04 | INFO | Using classifier
-  0%|          | 0/51200 [00:00<?, ?it/s]  3%|▎         | 1600/51200 [00:10<05:15, 157.35it/s]  6%|▋         | 3200/51200 [00:10<02:13, 358.52it/s]  9%|▉         | 4800/51200 [00:11<01:16, 604.96it/s] 12%|█▎        | 6400/51200 [00:11<00:50, 883.14it/s] 16%|█▌        | 8000/51200 [00:12<00:35, 1205.48it/s] 19%|█▉        | 9600/51200 [00:12<00:27, 1527.02it/s] 22%|██▏       | 11200/51200 [00:18<01:03, 626.77it/s] 25%|██▌       | 12800/51200 [00:18<00:45, 839.12it/s] 28%|██▊       | 14400/51200 [00:19<00:33, 1097.79it/s] 31%|███▏      | 16000/51200 [00:19<00:25, 1374.75it/s] 34%|███▍      | 17600/51200 [00:20<00:19, 1695.91it/s] 38%|███▊      | 19200/51200 [00:20<00:15, 2023.36it/s] 41%|████      | 20800/51200 [00:25<00:39, 766.03it/s]  44%|████▍     | 22400/51200 [00:26<00:28, 1012.12it/s] 47%|████▋     | 24000/51200 [00:27<00:23, 1148.14it/s] 50%|█████     | 25600/51200 [00:27<00:17, 1444.63it/s] 53%|█████▎    | 27200/51200 [00:27<00:13, 1785.78it/s] 56%|█████▋    | 28800/51200 [00:28<00:10, 2104.93it/s] 59%|█████▉    | 30400/51200 [00:33<00:27, 768.25it/s]  62%|██████▎   | 32000/51200 [00:34<00:19, 994.85it/s] 66%|██████▌   | 33600/51200 [00:35<00:18, 942.47it/s] 69%|██████▉   | 35200/51200 [00:36<00:13, 1204.12it/s] 72%|███████▏  | 36800/51200 [00:36<00:09, 1479.16it/s] 75%|███████▌  | 38400/51200 [00:37<00:07, 1785.48it/s] 78%|███████▊  | 40000/51200 [00:40<00:11, 970.10it/s]  81%|████████▏ | 41600/51200 [00:41<00:07, 1238.06it/s] 84%|████████▍ | 43200/51200 [00:43<00:07, 1025.63it/s] 88%|████████▊ | 44800/51200 [00:43<00:04, 1309.45it/s] 91%|█████████ | 46400/51200 [00:44<00:02, 1643.83it/s] 94%|█████████▍| 48000/51200 [00:44<00:01, 1974.74it/s] 97%|█████████▋| 49600/51200 [00:50<00:02, 707.70it/s] 100%|██████████| 51200/51200 [00:50<00:00, 962.58it/s]100%|██████████| 51200/51200 [00:50<00:00, 1008.29it/s]
-2025-01-08,13:49:55 | INFO | Finished zero-shot imagenet.
-2025-01-08,13:50:04 | INFO | Eval Epoch: 3 [1600 / 120000]	Clip Loss: 0.996221	
-2025-01-08,13:51:45 | INFO | Eval Epoch: 3 imagenet-zeroshot-val-top1: 0.4665	imagenet-zeroshot-val-top5: 0.7329	image_to_text_mean_rank: 81.6711	image_to_text_median_rank: 3.0000	image_to_text_R@1: 0.3735	image_to_text_R@5: 0.6238	image_to_text_R@10: 0.7137	text_to_image_mean_rank: 140.8841	text_to_image_median_rank: 3.0000	text_to_image_R@1: 0.3679	text_to_image_R@5: 0.6205	text_to_image_R@10: 0.7114	clip_val_loss: 0.9526	epoch: 3.0000	num_samples: 53495.0000
-2025-01-08,13:51:47 | INFO | Start epoch 3
-2025-01-08,13:51:56 | INFO | Train Epoch: 3 [   1600/6144000 (0%)] Data (t): 8.004 Batch (t): 8.455, 189.244/s, 189.244/s/gpu LR: 0.000008 Logit Scale: 100.000 Contrastive_loss: 0.32129 (0.32129) Loss: 0.32129 (0.32129)
-2025-01-08,13:53:34 | INFO | Train Epoch: 3 [ 161600/6144000 (3%)] Data (t): 0.537 Batch (t): 0.989, 1680.54/s, 1680.54/s/gpu LR: 0.000008 Logit Scale: 100.000 Contrastive_loss: 0.34510 (0.33319) Loss: 0.34510 (0.33319)
-2025-01-08,13:55:11 | INFO | Train Epoch: 3 [ 321600/6144000 (5%)] Data (t): 0.516 Batch (t): 0.967, 1662.17/s, 1662.17/s/gpu LR: 0.000008 Logit Scale: 100.000 Contrastive_loss: 0.29080 (0.31906) Loss: 0.29080 (0.31906)
-2025-01-08,13:56:51 | INFO | Train Epoch: 3 [ 481600/6144000 (8%)] Data (t): 0.549 Batch (t): 1.000, 1655.33/s, 1655.33/s/gpu LR: 0.000007 Logit Scale: 100.000 Contrastive_loss: 0.34470 (0.32547) Loss: 0.34470 (0.32547)
-2025-01-08,13:58:30 | INFO | Train Epoch: 3 [ 641600/6144000 (10%)] Data (t): 0.541 Batch (t): 0.992, 1201.10/s, 1201.10/s/gpu LR: 0.000007 Logit Scale: 100.000 Contrastive_loss: 0.25110 (0.31060) Loss: 0.25110 (0.31060)
-2025-01-08,14:00:12 | INFO | Train Epoch: 3 [ 801600/6144000 (13%)] Data (t): 0.562 Batch (t): 1.014, 1681.03/s, 1681.03/s/gpu LR: 0.000007 Logit Scale: 100.000 Contrastive_loss: 0.32157 (0.31243) Loss: 0.32157 (0.31243)
-2025-01-08,14:01:56 | INFO | Train Epoch: 3 [ 961600/6144000 (16%)] Data (t): 0.591 Batch (t): 1.044, 1713.29/s, 1713.29/s/gpu LR: 0.000007 Logit Scale: 99.999 Contrastive_loss: 0.37498 (0.32136) Loss: 0.37498 (0.32136)
-2025-01-08,14:03:44 | INFO | Train Epoch: 3 [1121600/6144000 (18%)] Data (t): 0.629 Batch (t): 1.081, 512.805/s, 512.805/s/gpu LR: 0.000006 Logit Scale: 100.000 Contrastive_loss: 0.35980 (0.32617) Loss: 0.35980 (0.32617)
-2025-01-08,14:05:33 | INFO | Train Epoch: 3 [1281600/6144000 (21%)] Data (t): 0.638 Batch (t): 1.090, 1867.89/s, 1867.89/s/gpu LR: 0.000006 Logit Scale: 100.000 Contrastive_loss: 0.27744 (0.32075) Loss: 0.27744 (0.32075)
-2025-01-08,14:07:19 | INFO | Train Epoch: 3 [1441600/6144000 (23%)] Data (t): 0.604 Batch (t): 1.055, 1754.14/s, 1754.14/s/gpu LR: 0.000006 Logit Scale: 100.000 Contrastive_loss: 0.32303 (0.32098) Loss: 0.32303 (0.32098)
-2025-01-08,14:09:08 | INFO | Train Epoch: 3 [1601600/6144000 (26%)] Data (t): 0.642 Batch (t): 1.094, 1253.91/s, 1253.91/s/gpu LR: 0.000005 Logit Scale: 100.000 Contrastive_loss: 0.31842 (0.32075) Loss: 0.31842 (0.32075)
-2025-01-08,14:10:59 | INFO | Train Epoch: 3 [1761600/6144000 (29%)] Data (t): 0.652 Batch (t): 1.106, 1671.94/s, 1671.94/s/gpu LR: 0.000005 Logit Scale: 100.000 Contrastive_loss: 0.29833 (0.31888) Loss: 0.29833 (0.31888)
-2025-01-08,14:12:48 | INFO | Train Epoch: 3 [1921600/6144000 (31%)] Data (t): 0.643 Batch (t): 1.095, 1746.69/s, 1746.69/s/gpu LR: 0.000005 Logit Scale: 100.000 Contrastive_loss: 0.32656 (0.31947) Loss: 0.32656 (0.31947)
-2025-01-08,14:14:39 | INFO | Train Epoch: 3 [2081600/6144000 (34%)] Data (t): 0.656 Batch (t): 1.108, 859.151/s, 859.151/s/gpu LR: 0.000005 Logit Scale: 100.000 Contrastive_loss: 0.25531 (0.31489) Loss: 0.25531 (0.31489)
-2025-01-08,14:16:20 | INFO | Train Epoch: 3 [2241600/6144000 (36%)] Data (t): 0.554 Batch (t): 1.007, 1661.83/s, 1661.83/s/gpu LR: 0.000004 Logit Scale: 100.000 Contrastive_loss: 0.23099 (0.30929) Loss: 0.23099 (0.30929)
-2025-01-08,14:18:00 | INFO | Train Epoch: 3 [2401600/6144000 (39%)] Data (t): 0.549 Batch (t): 1.001, 1553.25/s, 1553.25/s/gpu LR: 0.000004 Logit Scale: 100.000 Contrastive_loss: 0.20339 (0.30268) Loss: 0.20339 (0.30268)
-2025-01-08,14:19:42 | INFO | Train Epoch: 3 [2561600/6144000 (42%)] Data (t): 0.565 Batch (t): 1.017, 1773.91/s, 1773.91/s/gpu LR: 0.000004 Logit Scale: 100.000 Contrastive_loss: 0.22161 (0.29791) Loss: 0.22161 (0.29791)
-2025-01-08,14:21:25 | INFO | Train Epoch: 3 [2721600/6144000 (44%)] Data (t): 0.580 Batch (t): 1.033, 1872.36/s, 1872.36/s/gpu LR: 0.000003 Logit Scale: 100.000 Contrastive_loss: 0.25172 (0.29534) Loss: 0.25172 (0.29534)
-2025-01-08,14:23:06 | INFO | Train Epoch: 3 [2881600/6144000 (47%)] Data (t): 0.560 Batch (t): 1.013, 1353.88/s, 1353.88/s/gpu LR: 0.000003 Logit Scale: 100.000 Contrastive_loss: 0.25169 (0.29304) Loss: 0.25169 (0.29304)
-2025-01-08,14:24:48 | INFO | Train Epoch: 3 [3041600/6144000 (50%)] Data (t): 0.565 Batch (t): 1.016, 1076.08/s, 1076.08/s/gpu LR: 0.000003 Logit Scale: 100.000 Contrastive_loss: 0.24654 (0.29072) Loss: 0.24654 (0.29072)
-2025-01-08,14:26:29 | INFO | Train Epoch: 3 [3201600/6144000 (52%)] Data (t): 0.560 Batch (t): 1.012, 1803.25/s, 1803.25/s/gpu LR: 0.000003 Logit Scale: 100.000 Contrastive_loss: 0.22142 (0.28742) Loss: 0.22142 (0.28742)
-2025-01-08,14:28:11 | INFO | Train Epoch: 3 [3361600/6144000 (55%)] Data (t): 0.566 Batch (t): 1.018, 1838.60/s, 1838.60/s/gpu LR: 0.000002 Logit Scale: 100.000 Contrastive_loss: 0.24527 (0.28550) Loss: 0.24527 (0.28550)
-2025-01-08,14:29:53 | INFO | Train Epoch: 3 [3521600/6144000 (57%)] Data (t): 0.572 Batch (t): 1.024, 798.877/s, 798.877/s/gpu LR: 0.000002 Logit Scale: 100.000 Contrastive_loss: 0.23287 (0.28321) Loss: 0.23287 (0.28321)
-2025-01-08,14:31:35 | INFO | Train Epoch: 3 [3681600/6144000 (60%)] Data (t): 0.568 Batch (t): 1.021, 1717.40/s, 1717.40/s/gpu LR: 0.000002 Logit Scale: 100.000 Contrastive_loss: 0.22672 (0.28086) Loss: 0.22672 (0.28086)
-2025-01-08,14:33:17 | INFO | Train Epoch: 3 [3841600/6144000 (63%)] Data (t): 0.561 Batch (t): 1.014, 1856.44/s, 1856.44/s/gpu LR: 0.000002 Logit Scale: 100.000 Contrastive_loss: 0.21799 (0.27835) Loss: 0.21799 (0.27835)
-2025-01-08,14:35:00 | INFO | Train Epoch: 3 [4001600/6144000 (65%)] Data (t): 0.585 Batch (t): 1.037, 944.649/s, 944.649/s/gpu LR: 0.000001 Logit Scale: 100.000 Contrastive_loss: 0.24423 (0.27703) Loss: 0.24423 (0.27703)
-2025-01-08,14:36:46 | INFO | Train Epoch: 3 [4161600/6144000 (68%)] Data (t): 0.606 Batch (t): 1.058, 1706.77/s, 1706.77/s/gpu LR: 0.000001 Logit Scale: 100.000 Contrastive_loss: 0.16286 (0.27281) Loss: 0.16286 (0.27281)
-2025-01-08,14:38:28 | INFO | Train Epoch: 3 [4321600/6144000 (70%)] Data (t): 0.566 Batch (t): 1.018, 1723.58/s, 1723.58/s/gpu LR: 0.000001 Logit Scale: 100.000 Contrastive_loss: 0.20868 (0.27051) Loss: 0.20868 (0.27051)
-2025-01-08,14:40:09 | INFO | Train Epoch: 3 [4481600/6144000 (73%)] Data (t): 0.558 Batch (t): 1.010, 1139.64/s, 1139.64/s/gpu LR: 0.000001 Logit Scale: 100.000 Contrastive_loss: 0.16213 (0.26678) Loss: 0.16213 (0.26678)
-2025-01-08,14:41:53 | INFO | Train Epoch: 3 [4641600/6144000 (76%)] Data (t): 0.569 Batch (t): 1.040, 1596.50/s, 1596.50/s/gpu LR: 0.000001 Logit Scale: 100.000 Contrastive_loss: 0.19181 (0.26428) Loss: 0.19181 (0.26428)
-2025-01-08,14:43:41 | INFO | Train Epoch: 3 [4801600/6144000 (78%)] Data (t): 0.496 Batch (t): 1.084, 1573.80/s, 1573.80/s/gpu LR: 0.000001 Logit Scale: 100.000 Contrastive_loss: 0.19767 (0.26213) Loss: 0.19767 (0.26213)
-2025-01-08,14:45:26 | INFO | Train Epoch: 3 [4961600/6144000 (81%)] Data (t): 0.495 Batch (t): 1.043, 1638.32/s, 1638.32/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.18337 (0.25967) Loss: 0.18337 (0.25967)
-2025-01-08,14:47:13 | INFO | Train Epoch: 3 [5121600/6144000 (83%)] Data (t): 0.489 Batch (t): 1.076, 1693.17/s, 1693.17/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.17488 (0.25710) Loss: 0.17488 (0.25710)
-2025-01-08,14:48:59 | INFO | Train Epoch: 3 [5281600/6144000 (86%)] Data (t): 0.454 Batch (t): 1.056, 1560.50/s, 1560.50/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.17762 (0.25476) Loss: 0.17762 (0.25476)
-2025-01-08,14:50:45 | INFO | Train Epoch: 3 [5441600/6144000 (89%)] Data (t): 0.458 Batch (t): 1.059, 1488.21/s, 1488.21/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.17520 (0.25249) Loss: 0.17520 (0.25249)
-2025-01-08,14:52:31 | INFO | Train Epoch: 3 [5601600/6144000 (91%)] Data (t): 0.465 Batch (t): 1.064, 1526.23/s, 1526.23/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.16610 (0.25009) Loss: 0.16610 (0.25009)
-2025-01-08,14:54:18 | INFO | Train Epoch: 3 [5761600/6144000 (94%)] Data (t): 0.463 Batch (t): 1.068, 1576.33/s, 1576.33/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.21431 (0.24912) Loss: 0.21431 (0.24912)
-2025-01-08,14:56:02 | INFO | Train Epoch: 3 [5921600/6144000 (96%)] Data (t): 0.444 Batch (t): 1.044, 1473.62/s, 1473.62/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.19686 (0.24775) Loss: 0.19686 (0.24775)
-2025-01-08,14:57:45 | INFO | Train Epoch: 3 [6081600/6144000 (99%)] Data (t): 0.424 Batch (t): 1.025, 1651.03/s, 1651.03/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.22338 (0.24712) Loss: 0.22338 (0.24712)
-2025-01-08,14:58:24 | INFO | Train Epoch: 3 [6144000/6144000 (100%)] Data (t): 0.400 Batch (t): 1.004, 1554.61/s, 1554.61/s/gpu LR: 0.000000 Logit Scale: 100.000 Contrastive_loss: 0.11309 (0.24377) Loss: 0.11309 (0.24377)
-2025-01-08,14:58:24 | INFO | Starting zero-shot imagenet.
-2025-01-08,14:58:24 | INFO | Building zero-shot classifier
-  0%|          | 0/1000 [00:00<?, ?it/s]  2%|▏         | 20/1000 [00:00<00:09, 108.82it/s]  4%|▍         | 40/1000 [00:00<00:07, 121.13it/s]  6%|▌         | 60/1000 [00:00<00:07, 126.76it/s]  8%|▊         | 80/1000 [00:00<00:07, 129.25it/s] 10%|█         | 100/1000 [00:00<00:06, 132.74it/s] 12%|█▏        | 120/1000 [00:00<00:07, 119.78it/s] 14%|█▍        | 140/1000 [00:01<00:07, 112.03it/s] 16%|█▌        | 160/1000 [00:01<00:07, 107.88it/s] 18%|█▊        | 180/1000 [00:01<00:07, 104.05it/s] 20%|██        | 200/1000 [00:01<00:07, 102.19it/s] 22%|██▏       | 220/1000 [00:01<00:07, 104.69it/s] 24%|██▍       | 240/1000 [00:02<00:07, 105.53it/s] 26%|██▌       | 260/1000 [00:02<00:07, 104.09it/s] 28%|██▊       | 280/1000 [00:02<00:06, 104.53it/s] 30%|███       | 300/1000 [00:02<00:06, 101.41it/s] 32%|███▏      | 320/1000 [00:02<00:06, 103.87it/s] 34%|███▍      | 340/1000 [00:03<00:06, 108.46it/s] 36%|███▌      | 360/1000 [00:03<00:05, 116.85it/s] 38%|███▊      | 380/1000 [00:03<00:05, 120.27it/s] 40%|████      | 400/1000 [00:03<00:05, 119.20it/s] 42%|████▏     | 420/1000 [00:03<00:04, 119.23it/s] 44%|████▍     | 440/1000 [00:03<00:04, 121.08it/s] 46%|████▌     | 460/1000 [00:04<00:04, 125.74it/s] 48%|████▊     | 480/1000 [00:04<00:04, 122.90it/s] 50%|█████     | 500/1000 [00:04<00:04, 122.10it/s] 52%|█████▏    | 520/1000 [00:04<00:04, 115.69it/s] 54%|█████▍    | 540/1000 [00:04<00:04, 109.95it/s] 56%|█████▌    | 560/1000 [00:04<00:04, 108.05it/s] 58%|█████▊    | 580/1000 [00:05<00:04, 102.61it/s] 60%|██████    | 600/1000 [00:05<00:03, 102.47it/s] 62%|██████▏   | 620/1000 [00:05<00:03, 100.50it/s] 64%|██████▍   | 640/1000 [00:05<00:03, 103.95it/s] 66%|██████▌   | 660/1000 [00:05<00:03, 109.74it/s] 68%|██████▊   | 680/1000 [00:06<00:02, 117.51it/s] 70%|███████   | 700/1000 [00:06<00:02, 118.28it/s] 72%|███████▏  | 720/1000 [00:06<00:02, 113.30it/s] 74%|███████▍  | 740/1000 [00:06<00:02, 111.17it/s] 76%|███████▌  | 760/1000 [00:06<00:02, 104.18it/s] 78%|███████▊  | 780/1000 [00:07<00:02, 103.42it/s] 80%|████████  | 800/1000 [00:07<00:02, 98.00it/s]  82%|████████▏ | 820/1000 [00:07<00:01, 98.01it/s] 83%|████████▎ | 830/1000 [00:07<00:01, 96.03it/s] 84%|████████▍ | 840/1000 [00:07<00:01, 96.50it/s] 86%|████████▌ | 860/1000 [00:07<00:01, 95.94it/s] 87%|████████▋ | 870/1000 [00:07<00:01, 95.86it/s] 89%|████████▉ | 890/1000 [00:08<00:01, 94.08it/s] 90%|█████████ | 900/1000 [00:08<00:01, 94.91it/s] 91%|█████████ | 910/1000 [00:08<00:00, 95.83it/s] 92%|█████████▏| 920/1000 [00:08<00:00, 94.90it/s] 94%|█████████▍| 940/1000 [00:08<00:00, 98.76it/s] 96%|█████████▌| 960/1000 [00:08<00:00, 99.22it/s] 98%|█████████▊| 980/1000 [00:09<00:00, 103.65it/s]100%|██████████| 1000/1000 [00:09<00:00, 109.50it/s]100%|██████████| 1000/1000 [00:09<00:00, 108.04it/s]
-2025-01-08,14:58:34 | INFO | Using classifier
-  0%|          | 0/51200 [00:00<?, ?it/s]  3%|▎         | 1600/51200 [00:08<04:14, 195.19it/s]  6%|▋         | 3200/51200 [00:08<01:48, 443.78it/s]  9%|▉         | 4800/51200 [00:08<01:01, 752.79it/s] 12%|█▎        | 6400/51200 [00:09<00:40, 1119.62it/s] 16%|█▌        | 8000/51200 [00:09<00:28, 1510.35it/s] 19%|█▉        | 9600/51200 [00:10<00:21, 1933.08it/s] 22%|██▏       | 11200/51200 [00:13<00:41, 975.05it/s] 25%|██▌       | 12800/51200 [00:13<00:30, 1277.43it/s] 28%|██▊       | 14400/51200 [00:14<00:22, 1635.51it/s] 31%|███▏      | 16000/51200 [00:14<00:17, 1991.77it/s] 34%|███▍      | 17600/51200 [00:15<00:14, 2305.09it/s] 38%|███▊      | 19200/51200 [00:15<00:12, 2578.76it/s] 41%|████      | 20800/51200 [00:20<00:35, 845.07it/s]  44%|████▍     | 22400/51200 [00:20<00:25, 1119.83it/s] 47%|████▋     | 24000/51200 [00:21<00:19, 1425.63it/s] 50%|█████     | 25600/51200 [00:21<00:14, 1772.49it/s] 53%|█████▎    | 27200/51200 [00:21<00:11, 2111.93it/s] 56%|█████▋    | 28800/51200 [00:22<00:09, 2388.72it/s] 59%|█████▉    | 30400/51200 [00:25<00:18, 1118.47it/s] 62%|██████▎   | 32000/51200 [00:26<00:13, 1409.82it/s] 66%|██████▌   | 33600/51200 [00:26<00:10, 1719.02it/s] 69%|██████▉   | 35200/51200 [00:26<00:07, 2044.82it/s] 72%|███████▏  | 36800/51200 [00:27<00:06, 2355.94it/s] 75%|███████▌  | 38400/51200 [00:27<00:04, 2628.72it/s] 78%|███████▊  | 40000/51200 [00:30<00:08, 1339.23it/s] 81%|████████▏ | 41600/51200 [00:30<00:05, 1654.92it/s] 84%|████████▍ | 43200/51200 [00:31<00:04, 1962.27it/s] 88%|████████▊ | 44800/51200 [00:31<00:02, 2247.33it/s] 91%|█████████ | 46400/51200 [00:32<00:01, 2527.16it/s] 94%|█████████▍| 48000/51200 [00:32<00:01, 2746.18it/s] 97%|█████████▋| 49600/51200 [00:35<00:01, 1283.49it/s]100%|██████████| 51200/51200 [00:35<00:00, 1683.95it/s]100%|██████████| 51200/51200 [00:35<00:00, 1427.31it/s]
-2025-01-08,14:59:09 | INFO | Finished zero-shot imagenet.
-2025-01-08,14:59:16 | INFO | Eval Epoch: 4 [1600 / 120000]	Clip Loss: 1.099434	
-2025-01-08,15:01:08 | INFO | Eval Epoch: 4 imagenet-zeroshot-val-top1: 0.4685	imagenet-zeroshot-val-top5: 0.7366	image_to_text_mean_rank: 95.3334	image_to_text_median_rank: 3.0000	image_to_text_R@1: 0.3808	image_to_text_R@5: 0.6355	image_to_text_R@10: 0.7231	text_to_image_mean_rank: 156.5889	text_to_image_median_rank: 3.0000	text_to_image_R@1: 0.3776	text_to_image_R@5: 0.6329	text_to_image_R@10: 0.7206	clip_val_loss: 1.0396	epoch: 4.0000	num_samples: 53495.0000
-I0108 15:01:11.255000 2318804 site-packages/torch/_dynamo/utils.py:399] TorchDynamo compilation metrics:
-I0108 15:01:11.255000 2318804 site-packages/torch/_dynamo/utils.py:399] Function, Runtimes (s)
-I0108 15:01:11.263000 2318804 site-packages/torch/_subclasses/fake_tensor.py:2423] FakeTensor cache stats:
-I0108 15:01:11.265000 2318804 site-packages/torch/_subclasses/fake_tensor.py:2424]   cache_hits: 0
-I0108 15:01:11.266000 2318804 site-packages/torch/_subclasses/fake_tensor.py:2425]   cache_misses: 0

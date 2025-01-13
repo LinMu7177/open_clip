@@ -211,8 +211,6 @@ def load_checkpoint(
     # Finally, load the massaged state_dict into model
     # incompatible_keys = model.load_state_dict(state_dict, strict=strict)
     incompatible_keys = model.load_state_dict(state_dict, strict=False)
-    if 'conv1_alpha.weight' in incompatible_keys.missing_keys:
-        torch.nn.init.zeros_(model.conv1_alpha.weight)
     return incompatible_keys
 
 
