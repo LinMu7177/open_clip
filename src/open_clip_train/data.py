@@ -24,6 +24,7 @@ from webdataset.tariterators import base_plus_ext, url_opener, tar_file_expander
 import pickle
 import pycocotools.mask as mask_util
 
+from torchvision.transforms import Normalize
 from torchvision.transforms.functional import InterpolationMode
 from torchvision.transforms.transforms import JointRandomResizedCrop
 
@@ -41,6 +42,8 @@ join_preprocess = JointRandomResizedCrop(
         mask_interpolation=InterpolationMode.NEAREST,
         mask_antialias=False
     )
+
+objects_sense_normalize = Normalize(mean=[0.5], std=[0.26])
 
 class CsvDataset(Dataset):
     def __init__(self, input_filename, transforms, img_key, caption_key, sep="\t", tokenizer=None):
@@ -354,7 +357,9 @@ def get_objects_sense(key, image, objects_sense_format, objects_data):
     if objects_sense_format == 'edges':
         objects_sense_path = os.path.join(objects_data, key + '_edges.pkl')
         edges = load_edges(objects_sense_path,image.size)
-    edges = torch.as_tensor(edges).unsqueeze(0).half()
+
+    edges = torch.as_tensor(edges).unsqueeze(0).half() * 255
+    edges = objects_sense_normalize(edges)
     return edges
 
 def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None):
