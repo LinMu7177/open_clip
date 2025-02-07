@@ -74,7 +74,7 @@ class ClipLoss(nn.Module):
             cache_labels=False,
             rank=0,
             world_size=1,
-            use_horovod=False,
+            args=None
     ):
         super().__init__()
         self.local_loss = local_loss
@@ -82,36 +82,25 @@ class ClipLoss(nn.Module):
         self.cache_labels = cache_labels
         self.rank = rank
         self.world_size = world_size
-        self.use_horovod = use_horovod
-
         # cache state
         self.prev_num_logits = 0
         self.labels = {}
+        self.args = args
 
-    def get_ground_truth(self, device, num_logits) -> torch.Tensor:
-        # calculated ground-truth and cache if enabled
-        if self.prev_num_logits != num_logits or device not in self.labels:
-            labels = torch.arange(num_logits, device=device, dtype=torch.long)
-            if self.world_size > 1 and self.local_loss:
-                labels = labels + num_logits * self.rank
-            if self.cache_labels:
-                self.labels[device] = labels
-                self.prev_num_logits = num_logits
-        else:
-            labels = self.labels[device]
-        return labels
+    def forward(self, image_features, text_features, logit_scale, pos_that_have_negs):
+        device = image_features.device
+        positive_text_features = None
+        loss_neg = 0.
 
-    def get_logits(self, image_features, text_features, logit_scale):
+        if self.args.vl_negs and pos_that_have_negs:
+            loss_neg = self.get_loss_neg_only(image_features, text_features, logit_scale, pos_that_have_negs)
+            if self.args.no_neg_in_contrastive:
+                text_features = text_features[:len(image_features)]
+
         if self.world_size > 1:
             all_image_features, all_text_features = gather_features(
-                image_features,
-                text_features,
-                local_loss=self.local_loss,
-                gather_with_grad=self.gather_with_grad,
-                rank=self.rank,
-                world_size=self.world_size,
-                use_horovod=self.use_horovod,
-            )
+                image_features, text_features,
+                self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.args, positive_text_features)
 
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @ all_text_features.T
@@ -122,21 +111,85 @@ class ClipLoss(nn.Module):
         else:
             logits_per_image = logit_scale * image_features @ text_features.T
             logits_per_text = logit_scale * text_features @ image_features.T
-        
-        return logits_per_image, logits_per_text
 
-    def forward(self, image_features, text_features, logit_scale, output_dict=False):
-        device = image_features.device
-        logits_per_image, logits_per_text = self.get_logits(image_features, text_features, logit_scale)
+        if self.args.vl_negs and pos_that_have_negs:
+            logits_per_text = logits_per_text[:len(logits_per_image)]
 
-        labels = self.get_ground_truth(device, logits_per_image.shape[0])
+        # calculated ground-truth and cache if enabled
+        num_logits = logits_per_image.shape[0]
+        if self.prev_num_logits != num_logits or device not in self.labels:
+            labels = torch.arange(num_logits, device=device, dtype=torch.long)
+            if self.world_size > 1 and self.local_loss:
+                labels = labels + num_logits * self.rank
+            if self.cache_labels:
+                self.labels[device] = labels
+                self.prev_num_logits = num_logits
+        else:
+            labels = self.labels[device]
 
         total_loss = (
             F.cross_entropy(logits_per_image, labels) +
             F.cross_entropy(logits_per_text, labels)
-        ) / 2
+            ) / 2
 
-        return {"contrastive_loss": total_loss} if output_dict else total_loss
+        if self.args.vl_negs and pos_that_have_negs:
+            total_loss += self.args.neg_w*loss_neg
+            return total_loss, loss_neg
+        return total_loss, total_loss*0
+
+    def get_loss_neg_only(self, image_features, text_features, logit_scale,pos_that_have_negs):
+        num_imgs = image_features.shape[0]
+        image_features = image_features[pos_that_have_negs]
+        pos = text_features[:num_imgs][pos_that_have_negs].unsqueeze(1)
+        neg = text_features[num_imgs:].view((len(pos_that_have_negs), -1, text_features.shape[-1]))
+        pos_neg = torch.cat([pos,neg], dim=1)
+        image_features = image_features.unsqueeze(2)
+        logits = logit_scale * torch.matmul(pos_neg,image_features)[:,:,0]
+        ground_truth = torch.zeros(len(pos_that_have_negs)).long()
+        ground_truth = ground_truth.to(self.args.device, non_blocking=True)
+        total_loss = F.cross_entropy(logits, ground_truth)#zero is the right "class". the positive are always on the 0 place
+        return total_loss
+
+
+
+    def get_loss_pos_only(self, image_features, text_features,poss_features, logit_scale):
+        logits_per_image_text_pos = logit_scale * image_features @ poss_features.t()
+        ground_truth = (torch.arange(len(logits_per_image_text_pos)).long()).to(self.args.device, non_blocking=True)
+        logits_text_pos_to_text = logit_scale * text_features @ poss_features.t()
+        if self.args.symmetric:
+            logits_per_image_text_pos_op = logit_scale * poss_features @ image_features.t()
+            logits_text_pos_to_text_op = logit_scale * poss_features @ text_features.t()
+            total_loss = (F.cross_entropy(logits_per_image_text_pos, ground_truth)
+                          + F.cross_entropy(logits_per_image_text_pos_op, ground_truth)
+                         ) / 2
+            total_loss += ( F.cross_entropy(logits_text_pos_to_text, ground_truth)
+                    + F.cross_entropy(logits_text_pos_to_text_op, ground_truth))/2
+            total_loss = total_loss/2
+        else:
+            total_loss = F.cross_entropy(logits_per_image_text_pos, ground_truth)
+            total_loss+= F.cross_entropy(logits_text_pos_to_text, ground_truth)
+            total_loss = total_loss / 2
+
+
+        if self.args.kl_pos:
+            kl_loss = nn.KLDivLoss(reduction="batchmean")
+            logits_per_image_text = logit_scale * image_features @ text_features.t()
+            two_pos_feat = torch.stack([torch.diagonal(logits_per_image_text,0),torch.diagonal(logits_per_image_text_pos,0)],dim=1)
+            ground_truth = F.softmax(0.5 + torch.zeros_like(two_pos_feat),dim=1).to(self.args.device, non_blocking=True)
+            log_probs = F.log_softmax(two_pos_feat, dim=1)
+            loss_kl = 0.1*kl_loss(log_probs, ground_truth)
+            total_loss += loss_kl
+        if self.args.common_batch_pos:
+            kl_loss = nn.KLDivLoss(reduction="batchmean")
+            text_and_pos_feat = torch.cat([text_features,poss_features])
+            logits_per_image_text_and_pos_feat = logit_scale * image_features @ text_and_pos_feat.t()
+            log_probs = F.log_softmax(logits_per_image_text_and_pos_feat, dim=1)
+            ground_truth = F.softmax((torch.cat([torch.eye(self.args.batch_size), torch.eye(self.args.batch_size)], dim=1) / 2),dim=1).to(self.args.device, non_blocking=True)
+            loss_kl_common_batch_pos = 0.01*kl_loss(log_probs, ground_truth)
+            total_loss += loss_kl_common_batch_pos
+
+
+        return total_loss
 
 
 class CoCaLoss(ClipLoss):

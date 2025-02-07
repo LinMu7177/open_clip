@@ -310,11 +310,13 @@ class CLIP(nn.Module):
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
             objects_sense: Optional[torch.Tensor] = None,
+            neg_text: Optional[torch.Tensor] = None,
     ):
         if objects_sense is not None:
             image_features = self.encode_image(image, objects_sense, normalize=True) if image is not None else None
         else:
             image_features = self.encode_image(image, normalize=True) if image is not None else None
+
         text_features = self.encode_text(text, normalize=True) if text is not None else None
 
         if self.output_dict:

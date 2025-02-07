@@ -4,6 +4,9 @@ models/
 features/
 results/
 
+nohup*
+*.log.out
+
 tests/data/
 *.pt
 
@@ -151,5 +154,3 @@ core.*
 
 # Allow
 !src/evaluation/misc/results_dbs/*
-
-nohup*

@@ -55,12 +55,25 @@ def unwrap_model(model):
     else:
         return model
 
+def prepare_data_for_neg_loss(negs, args, device, texts):
+    negs = negs.to(device=device, non_blocking=True)
+    negs = negs.view(-1, negs.shape[-1])
+    # clean non-negs that are zero. they r there because not every text has a negative
+    pos_that_have_negs = [i for i, l in enumerate(list(negs[::args.num_negs])) if l.nonzero().any()]
+    negs = [l for l in list(negs) if l.nonzero().any()]
+    if len(negs) == 0:
+        pos_that_have_negs=None
+    else:
+        texts = torch.cat((texts, torch.stack(negs)), dim=0)
+
+    return texts,pos_that_have_negs
 
 def backward(total_loss, scaler):
     if scaler is not None:
         scaler.scale(total_loss).backward()
     else:
         total_loss.backward()
+
 
 def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, objects_sense_format, tb_writer=None):
     device = torch.device(args.device)
@@ -90,15 +103,24 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         if not args.skip_scheduler:
             scheduler(step)
 
-        if args.objects_sense_format:
+        if args.objects_sense_format and args.neg_type:
+            images, texts, objects_sense, neg_texts = batch
+            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+            neg_texts = neg_texts.to(device=device, non_blocking=True)
+        elif args.objects_sense_format:
             images, texts, objects_sense = batch
             objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
         else:
             images, texts = batch
             objects_sense = None
+            neg_texts = None
 
         images = images.to(device=device, dtype=input_dtype, non_blocking=True)
         texts = texts.to(device=device, non_blocking=True)
+        pos_that_have_negs = None
+
+        if neg_texts is not None:
+            texts, pos_that_have_negs = prepare_data_for_neg_loss(neg_texts, args, device, texts)
 
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
@@ -111,10 +133,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     with torch.no_grad():
                         dist_model_out = dist_model(images, texts)
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
-                losses = loss(**model_out, output_dict=True)
+                # losses = loss(**model_out, output_dict=True)
+                losses = {}
+                total_loss, loss_neg = loss(model_out["image_features"], model_out["text_features"], model_out["logit_scale"], pos_that_have_negs)
 
-                total_loss = sum(losses.values())
                 losses["loss"] = total_loss
+                losses["loss_neg"] = loss_neg
 
             backward(total_loss, scaler)
         else:
@@ -163,8 +187,8 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     losses = loss(**inputs, **inputs_no_accum, output_dict=True)
                     del inputs
                     del inputs_no_accum
-                    total_loss = sum(losses.values())
                     losses["loss"] = total_loss
+                    losses["loss_neg"] = loss_neg
 
                 backward(total_loss, scaler)
 

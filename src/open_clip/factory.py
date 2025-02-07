@@ -458,7 +458,7 @@ def create_loss(args):
         cache_labels=True,
         rank=args.rank,
         world_size=args.world_size,
-        use_horovod=args.horovod,
+        args=args
     )
 
 

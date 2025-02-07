@@ -4,6 +4,8 @@ import logging
 import math
 import os
 import random
+import numbers
+import warnings
 import sys
 import braceexpand
 from dataclasses import dataclass
@@ -26,12 +28,164 @@ import pycocotools.mask as mask_util
 
 from torchvision.transforms import Normalize
 from torchvision.transforms.functional import InterpolationMode
-from torchvision.transforms.transforms import JointRandomResizedCrop
+import torchvision.transforms.functional as F
+# from torchvision.transforms.transforms import JointRandomResizedCrop
+
+from open_clip_train.svlc_learning.negs_and_pos import Negatives,NegativesLLM, ChunkSample,BothNegatives
+
+from torch import Tensor
+from collections.abc import Sequence
+from typing import List, Tuple
 
 try:
     import horovod.torch as hvd
 except ImportError:
     hvd = None
+
+def _setup_size(size, error_msg):
+    if isinstance(size, numbers.Number):
+        return int(size), int(size)
+
+    if isinstance(size, Sequence) and len(size) == 1:
+        return size[0], size[0]
+
+    if len(size) != 2:
+        raise ValueError(error_msg)
+
+    return size
+
+class JointRandomResizedCrop(torch.nn.Module):
+    def __init__(
+        self,
+        size,
+        scale=(0.08, 1.0),
+        ratio=(3.0 / 4.0, 4.0 / 3.0),
+        interpolation=InterpolationMode.BILINEAR,
+        antialias: bool = True,
+        mask_interpolation=InterpolationMode.NEAREST,
+        mask_antialias: bool = False
+    ):
+        super().__init__()
+        self.size = _setup_size(size, error_msg="Please provide only two dimensions (h, w) for size.")
+
+        if not isinstance(scale, Sequence):
+            raise TypeError("Scale should be a sequence")
+        if not isinstance(ratio, Sequence):
+            raise TypeError("Ratio should be a sequence")
+        if (scale[0] > scale[1]) or (ratio[0] > ratio[1]):
+            warnings.warn("Scale and ratio should be of kind (min, max)")
+
+        if isinstance(interpolation, int):
+            interpolation = F._interpolation_modes_from_int(interpolation)
+        if isinstance(mask_interpolation, int):
+            mask_interpolation = F._interpolation_modes_from_int(mask_interpolation)
+
+        self.interpolation = interpolation
+        self.antialias = antialias
+        self.scale = scale
+        self.ratio = ratio
+        self.mask_interpolation = mask_interpolation
+        self.mask_antialias = mask_antialias
+
+    @staticmethod
+    def get_params(img: Tensor, scale: List[float], ratio: List[float]) -> Tuple[int, int, int, int]:
+        """Get parameters for ``crop`` for a random sized crop.
+
+        Args:
+            img (PIL Image or Tensor): Input image.
+            scale (list): range of scale of the origin size cropped
+            ratio (list): range of aspect ratio of the origin aspect ratio cropped
+
+        Returns:
+            tuple: params (i, j, h, w) to be passed to ``crop`` for a random
+            sized crop.
+        """
+        _, height, width = F.get_dimensions(img)
+        area = height * width
+
+        log_ratio = torch.log(torch.tensor(ratio))
+        for _ in range(10):
+            target_area = area * torch.empty(1).uniform_(scale[0], scale[1]).item()
+            aspect_ratio = torch.exp(torch.empty(1).uniform_(log_ratio[0], log_ratio[1])).item()
+
+            w = int(round(math.sqrt(target_area * aspect_ratio)))
+            h = int(round(math.sqrt(target_area / aspect_ratio)))
+
+            if 0 < w <= width and 0 < h <= height:
+                i = torch.randint(0, height - h + 1, size=(1,)).item()
+                j = torch.randint(0, width - w + 1, size=(1,)).item()
+                return i, j, h, w
+
+        # Fallback to central crop
+        in_ratio = float(width) / float(height)
+        if in_ratio < min(ratio):
+            w = width
+            h = int(round(w / min(ratio)))
+        elif in_ratio > max(ratio):
+            h = height
+            w = int(round(h * max(ratio)))
+        else:  # whole image
+            w = width
+            h = height
+        i = (height - h) // 2
+        j = (width - w) // 2
+        return i, j, h, w
+
+    def forward(self, sample: dict) -> dict:
+        """
+        Args:
+            sample (dict): 包含 "image" 和 "mask" 的字典:
+                sample["image"]: PIL.Image 或 Tensor
+                sample["objects_sense"]:  PIL.Image 或 Tensor
+            其他键值可以自行存放在这个字典里，本函数只会操作 "image" 和 "mask"。
+
+        Returns:
+            dict: 返回同一个字典，其中 "image" 和 "mask" 都经过随机裁剪 & resize。
+        """
+        # 取出图像与mask
+        img = sample["image"]
+        msk = sample["objects_sense"]
+
+        # 1) 先得到随机裁剪参数
+        i, j, h, w = self.get_params(img, self.scale, self.ratio)
+
+        # 2) 对图像进行随机裁剪+resize
+        #   - 双线性/双三次插值可以使用 antialias=True
+        img = F.resized_crop(
+            img, i, j, h, w,
+            self.size,
+            self.interpolation,
+            antialias=self.antialias
+        )
+
+        # 3) 对mask进行相同的随机裁剪+resize
+        #   - 对mask通常用最近邻插值 (mask_interpolation) 并禁用 antialias
+        #   - 避免将分类标签插值为非整数
+        msk = F.resized_crop(
+            msk, i, j, h, w,
+            self.size,
+            self.mask_interpolation,
+            antialias=self.mask_antialias
+        )
+
+        # 4) 放回 sample
+        sample["image"] = img
+        sample["objects_sense"] = msk
+        return sample
+
+    def __repr__(self) -> str:
+        interpolate_str = self.interpolation.value
+        mask_interpolate_str = self.mask_interpolation.value
+        format_string = (
+            f"{self.__class__.__name__}(size={self.size}, "
+            f"scale={tuple(round(s, 4) for s in self.scale)}, "
+            f"ratio={tuple(round(r, 4) for r in self.ratio)}, "
+            f"interpolation={interpolate_str}, "
+            f"antialias={self.antialias}, "
+            f"mask_interpolation={mask_interpolate_str}, "
+            f"mask_antialias={self.mask_antialias})"
+        )
+        return format_string
 
 join_preprocess = JointRandomResizedCrop(
         size=(224, 224),
@@ -44,6 +198,14 @@ join_preprocess = JointRandomResizedCrop(
     )
 
 objects_sense_normalize = Normalize(mean=[0.5], std=[0.26])
+
+def choose_negs_function(args):
+    if args.neg_type=='llm':
+        return NegativesLLM(args)
+    elif args.neg_type=='both':
+        return BothNegatives(args)
+    else:
+        return Negatives(args)
 
 class CsvDataset(Dataset):
     def __init__(self, input_filename, transforms, img_key, caption_key, sep="\t", tokenizer=None):
@@ -362,7 +524,7 @@ def get_objects_sense(key, image, objects_sense_format, objects_data):
     edges = objects_sense_normalize(edges)
     return edges
 
-def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None):
+def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None):
     input_shards = args.train_data if is_train else args.val_data
     assert input_shards is not None
     resampled = getattr(args, 'dataset_resampled', False) and is_train
@@ -424,7 +586,6 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
             wds.tarfile_to_samples(handler=log_and_continue),
         ])
 
-
     if args.objects_sense_format:
         if is_train:
             preprocess_img.transforms = preprocess_img.transforms[1:]
@@ -436,11 +597,22 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
                 wds.map(lambda sample: {**sample, 'objects_sense':
                     get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
                 # Apply the same random cropping to the image and objects sense
-                wds.map(join_preprocess),
-                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-                wds.to_tuple("image", "text", "objects_sense"),
-                wds.batched(args.batch_size, partial=not is_train)
+                wds.map(join_preprocess)
             ])
+
+            if args.vl_negs:
+                pipeline.extend([
+                    wds.map(lambda sample: {**sample, 'negatives':negs_creator.create_negs(sample['text'])}),
+                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0], negatives=lambda negatives: tokenizer(negatives)),
+                    wds.to_tuple("image", "text", "objects_sense", "negatives"),
+                    wds.batched(args.batch_size, partial=not is_train)
+                ])
+            else:
+                pipeline.extend([
+                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
+                    wds.to_tuple("image", "text", "objects_sense"),
+                    wds.batched(args.batch_size, partial=not is_train)
+                ])
         else:
             preprocess_objects_val = copy.deepcopy(preprocess_img)
             preprocess_objects_val.transforms = preprocess_objects_val.transforms[:2]
@@ -617,9 +789,11 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
     preprocess_train, preprocess_val = preprocess_fns
     data = {}
 
+    negs_creator = choose_negs_function(args)
+
     if args.train_data or args.dataset_type == "synthetic":
         data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-            args, preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer)
+            args, preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator)
 
     if args.val_data:
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
@@ -632,3 +806,5 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
         data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
 
     return data
+
+
