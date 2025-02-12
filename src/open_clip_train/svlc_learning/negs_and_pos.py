@@ -64,14 +64,14 @@ class Negatives(object):
 
 class NegativesLLM(object):
     def __init__(self,args ) -> None:
-        self.classifier = pipeline("fill-mask")
+        self.classifier = pipeline("fill-mask",device=-1)
         self.args = args
         self.nlp = spacy.load("en_core_web_sm")
 
     def create_negs(self,caption):
         if len(caption) > 512:
             caption = caption[:100]
-        negatives = tokenize([''] * self.args.num_negs) * 0
+        neg_attr_text = []
         clean_caption = " ".join(caption.translate(str.maketrans('', '', string.punctuation)).split())
         doc = self.nlp(clean_caption)
         # Analyze syntax
@@ -81,25 +81,31 @@ class NegativesLLM(object):
             neg_attr_text = []
             for i in range(self.args.num_negs):
                 attr_to_change = positives_in_cap[random.randint(0, len(positives_in_cap) - 1)]
-                try:
-                    pos_incides = np.nonzero([1 if (w == attr_to_change) else 0 for w in clean_caption.split()])[0]
-                    index_to_change = random.choice(pos_incides)
-                    list_clean_cap = clean_caption.split()
-                    list_clean_cap[index_to_change] = '<mask>'
-                    fill_mask_list = self.classifier(' '.join(list_clean_cap))
-                except:
-                    print('fill-mask issue')
-
+                pos_incides = np.nonzero([1 if (w == attr_to_change) else 0 for w in clean_caption.split()])[0]
+                index_to_change = random.choice(pos_incides)
+                list_clean_cap = clean_caption.split()
+                list_clean_cap[index_to_change] = '<mask>'
+                fill_mask_list = self.classifier(' '.join(list_clean_cap))
+                # try:
+                #     pos_incides = np.nonzero([1 if (w == attr_to_change) else 0 for w in clean_caption.split()])[0]
+                #     index_to_change = random.choice(pos_incides)
+                #     list_clean_cap = clean_caption.split()
+                #     list_clean_cap[index_to_change] = '<mask>'
+                #     fill_mask_list = self.classifier(' '.join(list_clean_cap))
+                # except:
+                #     print('fill-mask issue')
                 try:
                     filttered_from_GT = [item for item in fill_mask_list if not (item["token_str"].strip(' ') == attr_to_change)]
                     negative_caption = filttered_from_GT[random.randint(0, len(filttered_from_GT) - 1)][
                         "sequence"]#[-1]
                     neg_attr_text.append(negative_caption)
-                    negatives = tokenize(neg_attr_text)
                 except:
                     print('post_process negs issue')
+        if neg_attr_text != []:
+            return neg_attr_text
+        else:
+            return [''] * self.args.num_negs
 
-        return negatives
 
 class ChunkSample(Sampler):
     def __init__(self, dataset: Dataset,

@@ -524,7 +524,7 @@ def get_objects_sense(key, image, objects_sense_format, objects_data):
     edges = objects_sense_normalize(edges)
     return edges
 
-def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None):
+def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None, num_workers=4):
     input_shards = args.train_data if is_train else args.val_data
     assert input_shards is not None
     resampled = getattr(args, 'dataset_resampled', False) and is_train
@@ -660,8 +660,8 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
         dataset,
         batch_size=None,
         shuffle=False,
-        num_workers=args.workers,
-        persistent_workers=args.workers > 0,
+        num_workers=num_workers,
+        persistent_workers=num_workers > 0,
     )
 
     # FIXME not clear which approach is better, with_epoch before vs after dataloader?
@@ -793,11 +793,11 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
 
     if args.train_data or args.dataset_type == "synthetic":
         data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-            args, preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator)
+            args, preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator, num_workers=args.train_num_workers)
 
     if args.val_data:
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
-            args, preprocess_val, is_train=False, tokenizer=tokenizer)
+            args, preprocess_val, is_train=False, tokenizer=tokenizer, num_workers=args.val_num_workers)
 
     if args.imagenet_val is not None:
         data["imagenet-val"] = get_imagenet(args, preprocess_fns, "val")

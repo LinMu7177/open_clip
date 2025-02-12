@@ -99,7 +99,8 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
     for i, batch in enumerate(dataloader):
         i_accum = i // args.accum_freq
         step = num_batches_per_epoch * epoch + i_accum
-
+        neg_texts = None
+        
         if not args.skip_scheduler:
             scheduler(step)
 
@@ -113,7 +114,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         else:
             images, texts = batch
             objects_sense = None
-            neg_texts = None
+
 
         images = images.to(device=device, dtype=input_dtype, non_blocking=True)
         texts = texts.to(device=device, non_blocking=True)

@@ -137,6 +137,12 @@ def parse_args(args):
         "--workers", type=int, default=4, help="Number of dataloader workers per GPU."
     )
     parser.add_argument(
+        "--train_num_workers", type=int, default=4, help="Number of dataloader workers per GPU in the training process."
+    )
+    parser.add_argument(
+        "--val_num_workers", type=int, default=4, help="Number of dataloader workers per GPU in the validation process."
+    )
+    parser.add_argument(
         "--batch-size", type=int, default=64, help="Batch size per GPU."
     )
     parser.add_argument(
@@ -506,6 +512,8 @@ def parse_args(args):
     )
     parser.add_argument("--vl-negs", default=False, action="store_true", help="vl negatives")
     parser.add_argument('--vl_neg_type', default=['color', 'action', 'material', 'size', 'state'], nargs='+')
+    parser.add_argument('--llm_neg_types', default=['VERB', 'NOUN', 'ADP', 'ADJ', 'PROPN'], nargs='+')
+
     parser.add_argument("--num-negs", default=1, type=int, help="number of negative examples", )
     parser.add_argument("--no_neg_in_contrastive", default=False, action="store_true", help="no_neg_in_contrastive")
     parser.add_argument("--neg_w", type=int, default=1, help="negative loss weighting")
