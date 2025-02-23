@@ -23,12 +23,18 @@ class BothNegatives(object):
         self.NegativesLLM = NegativesLLM(args)
         self.args = args
 
-    def create_negs(self, caption):
+    def create_negs(self, sample):
         neg_type_curr = random.choice([0,1])
         if neg_type_curr == 0:
-            negatives = self.Negatives.create_negs(caption)
+            negatives = self.Negatives.create_negs(sample)
         else:
-            negatives = self.NegativesLLM.create_negs(caption)
+            # negatives = self.NegativesLLM.create_negs(caption)
+            neg_txt_keys = [key for key, value in sample.items() if 'neg_txt' in key and value]
+            if neg_txt_keys:
+                selected_key = random.choice(neg_txt_keys)
+                negatives = [str(sample[selected_key]).encode().decode('utf-8')]
+            else:
+                return [''] * self.args.num_negs
         return negatives
 
 class Negatives(object):
@@ -37,7 +43,8 @@ class Negatives(object):
                       'material': material_list}
         self.args = args
 
-    def create_negs(self,caption):
+    def create_negs(self,sample):
+        caption = sample['text']
         negs = len(self.args.vl_neg_type) * [0]
         for ind, neg_type in enumerate(self.args.vl_neg_type):
             negs[ind] = int(
@@ -64,11 +71,12 @@ class Negatives(object):
 
 class NegativesLLM(object):
     def __init__(self,args ) -> None:
-        self.classifier = pipeline("fill-mask",device=-1)
+        self.classifier = pipeline("fill-mask")
         self.args = args
         self.nlp = spacy.load("en_core_web_sm")
 
-    def create_negs(self,caption):
+    def create_negs(self,sample):
+        caption = sample['text']
         if len(caption) > 512:
             caption = caption[:100]
         neg_attr_text = []

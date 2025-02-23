@@ -56,14 +56,14 @@ def _setup_size(size, error_msg):
 
 class JointRandomResizedCrop(torch.nn.Module):
     def __init__(
-        self,
-        size,
-        scale=(0.08, 1.0),
-        ratio=(3.0 / 4.0, 4.0 / 3.0),
-        interpolation=InterpolationMode.BILINEAR,
-        antialias: bool = True,
-        mask_interpolation=InterpolationMode.NEAREST,
-        mask_antialias: bool = False
+            self,
+            size,
+            scale=(0.08, 1.0),
+            ratio=(3.0 / 4.0, 4.0 / 3.0),
+            interpolation=InterpolationMode.BILINEAR,
+            antialias: bool = True,
+            mask_interpolation=InterpolationMode.NEAREST,
+            mask_antialias: bool = False
     ):
         super().__init__()
         self.size = _setup_size(size, error_msg="Please provide only two dimensions (h, w) for size.")
@@ -187,17 +187,19 @@ class JointRandomResizedCrop(torch.nn.Module):
         )
         return format_string
 
+
 join_preprocess = JointRandomResizedCrop(
-        size=(224, 224),
-        scale=(0.9, 1.0),
-        ratio=(0.75, 1.3333),
-        interpolation=InterpolationMode.BILINEAR,
-        antialias=True,
-        mask_interpolation=InterpolationMode.NEAREST,
-        mask_antialias=False
-    )
+    size=(224, 224),
+    scale=(0.9, 1.0),
+    ratio=(0.75, 1.3333),
+    interpolation=InterpolationMode.BILINEAR,
+    antialias=True,
+    mask_interpolation=InterpolationMode.NEAREST,
+    mask_antialias=False
+)
 
 objects_sense_normalize = Normalize(mean=[0.5], std=[0.26])
+
 
 def choose_negs_function(args):
     if args.neg_type=='llm':
@@ -206,6 +208,7 @@ def choose_negs_function(args):
         return BothNegatives(args)
     else:
         return Negatives(args)
+
 
 class CsvDataset(Dataset):
     def __init__(self, input_filename, transforms, img_key, caption_key, sep="\t", tokenizer=None):
@@ -259,7 +262,7 @@ def expand_urls(urls, weights=None):
     if isinstance(urls, str):
         urllist = urls.split("::")
         weights = weights.split('::')
-        assert len(weights) == len(urllist),\
+        assert len(weights) == len(urllist), \
             f"Expected the number of data components ({len(urllist)}) and weights({len(weights)}) to match."
         weights = [float(weight) for weight in weights]
         all_urls, all_weights = [], []
@@ -456,13 +459,13 @@ class ResampledShards2(IterableDataset):
     """An iterable dataset yielding a list of urls."""
 
     def __init__(
-        self,
-        urls,
-        weights=None,
-        nshards=sys.maxsize,
-        worker_seed=None,
-        deterministic=False,
-        epoch=-1,
+            self,
+            urls,
+            weights=None,
+            nshards=sys.maxsize,
+            worker_seed=None,
+            deterministic=False,
+            epoch=-1,
     ):
         """Sample shards from the shard list with replacement.
 
@@ -473,7 +476,7 @@ class ResampledShards2(IterableDataset):
         self.urls = urls
         self.weights = weights
         if self.weights is not None:
-            assert len(self.urls) == len(self.weights),\
+            assert len(self.urls) == len(self.weights), \
                 f"Number of urls {len(self.urls)} and weights {len(self.weights)} should match."
         assert isinstance(self.urls[0], str)
         self.nshards = nshards
@@ -505,6 +508,7 @@ class ResampledShards2(IterableDataset):
             else:
                 yield dict(url=self.rng.choices(self.urls, weights=self.weights, k=1)[0])
 
+
 def load_edges(edges_demo_path, image_shape):
     if os.path.exists(edges_demo_path):
         with open(edges_demo_path, 'rb') as f:
@@ -515,16 +519,19 @@ def load_edges(edges_demo_path, image_shape):
     else:
         return np.ones(image_shape[:2], dtype=np.uint8)
 
+
 def get_objects_sense(key, image, objects_sense_format, objects_data):
     if objects_sense_format == 'edges':
         objects_sense_path = os.path.join(objects_data, key + '_edges.pkl')
-        edges = load_edges(objects_sense_path,image.size)
+        edges = load_edges(objects_sense_path, image.size)
 
     edges = torch.as_tensor(edges).unsqueeze(0).half() * 255
     edges = objects_sense_normalize(edges)
     return edges
 
-def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None, num_workers=4):
+
+def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None,
+                    num_workers=4):
     input_shards = args.train_data if is_train else args.val_data
     assert input_shards is not None
     resampled = getattr(args, 'dataset_resampled', False) and is_train
@@ -541,7 +548,7 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
                     'Please specify it via `--train-num-samples` if no dataset length info is present.')
     else:
         # Eval will just exhaust the iterator if the size is not specified.
-        num_samples = args.val_num_samples or 0 
+        num_samples = args.val_num_samples or 0
 
     shared_epoch = SharedEpoch(epoch=epoch)  # create a shared epoch store to sync epoch to dataloader worker proc
 
@@ -602,8 +609,9 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
 
             if args.vl_negs:
                 pipeline.extend([
-                    wds.map(lambda sample: {**sample, 'negatives':negs_creator.create_negs(sample['text'])}),
-                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0], negatives=lambda negatives: tokenizer(negatives)),
+                    wds.map(lambda sample: {**sample, 'negatives': negs_creator.create_negs(sample)}),
+                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0],
+                                 negatives=lambda negatives: tokenizer(negatives)),
                     wds.to_tuple("image", "text", "objects_sense", "negatives"),
                     wds.batched(args.batch_size, partial=not is_train)
                 ])
@@ -623,7 +631,8 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
                 wds.map(lambda sample: {**sample, 'objects_sense':
                     get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
                 # Apply the same random cropping to the image and objects sense
-                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0], objects_sense=preprocess_objects_val),
+                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0],
+                             objects_sense=preprocess_objects_val),
                 wds.to_tuple("image", "text", "objects_sense"),
                 wds.batched(args.batch_size, partial=not is_train)
             ])
@@ -783,7 +792,7 @@ def get_dataset_fn(data_path, dataset_type):
                 f"Tried to figure out dataset type, but failed for extension {ext}.")
     else:
         raise ValueError(f"Unsupported dataset type: {dataset_type}")
-    
+
 
 def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
     preprocess_train, preprocess_val = preprocess_fns
@@ -793,7 +802,8 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
 
     if args.train_data or args.dataset_type == "synthetic":
         data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-            args, preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator, num_workers=args.train_num_workers)
+            args, preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator,
+            num_workers=args.train_num_workers)
 
     if args.val_data:
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
