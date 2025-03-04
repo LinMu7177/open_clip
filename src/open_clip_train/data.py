@@ -231,6 +231,43 @@ class CsvDataset(Dataset):
         return images, texts
 
 
+class JsonlDataset(Dataset):
+    def __init__(self, input_filename, transforms, tokenizer=None, objects_sense_format=None, objects_data=None, is_train=False):
+        logging.debug(f'Loading jsonl data from {input_filename}.')
+        with open(input_filename, 'r') as f:
+            lines = f.readlines()
+        self.data = [json.loads(line) for line in lines]
+        self.transforms = transforms
+        logging.debug('Done loading data.')
+
+        self.tokenize = tokenizer
+
+        self.objects_sense_format = objects_sense_format
+        self.objects_data = objects_data
+        self.is_train = is_train
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        image_path = self.data[idx]['img']
+        images = self.transforms(Image.open(image_path))
+        texts = self.tokenize([self.data[idx]['positive_sample']])[0]
+
+        res = [images, texts]
+        if self.objects_sense_format:
+            dirname = os.path.basename(os.path.dirname(image_path))
+            filename = os.path.splitext(os.path.basename(image_path))[0]
+            key = os.path.join(dirname, filename)
+            objects_sense = get_objects_sense(key, images, self.objects_sense_format, self.objects_data)
+            sample = join_preprocess({"image": images, "objects_sense": objects_sense})
+            res = [sample["image"], texts, sample["objects_sense"]]
+        
+        if self.is_train:
+            res.append(self.tokenize(self.data[idx]['negative_samples']))
+        return tuple(res)
+
+
 class SharedEpoch:
     def __init__(self, epoch: int = 0):
         self.shared_epoch = Value('i', epoch)
@@ -376,6 +413,8 @@ def group_by_keys_nothrow(data, keys=base_plus_ext, lcase=True, suffixes=None, h
     current_sample = None
     for filesample in data:
         assert isinstance(filesample, dict)
+        if 'fname' not in filesample:
+            continue
         fname, value = filesample["fname"], filesample["data"]
         prefix, suffix = keys(fname)
         if prefix is None:
@@ -723,6 +762,36 @@ def get_csv_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None):
 
     return DataInfo(dataloader, sampler)
 
+def get_jsonl_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None, **kwargs):
+    input_filename = args.train_data if is_train else args.val_data
+    assert input_filename
+    dataset = JsonlDataset(
+        input_filename,
+        preprocess_fn,
+        tokenizer=tokenizer,
+        objects_sense_format=args.objects_sense_format,
+        objects_data=args.objects_data,
+        is_train=is_train
+    )
+    num_samples = len(dataset)
+    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
+    shuffle = is_train and sampler is None
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=shuffle,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=sampler,
+        drop_last=is_train,
+    )
+    dataloader.num_samples = num_samples
+    dataloader.num_batches = len(dataloader)
+
+    return DataInfo(dataloader, sampler)
+
+
 
 class SyntheticDataset(Dataset):
 
@@ -781,6 +850,8 @@ def get_dataset_fn(data_path, dataset_type):
         return get_csv_dataset
     elif dataset_type == "synthetic":
         return get_synthetic_dataset
+    elif dataset_type == "jsonl":
+        return get_jsonl_dataset
     elif dataset_type == "auto":
         ext = data_path.split('.')[-1]
         if ext in ['csv', 'tsv']:
@@ -816,5 +887,3 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
         data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
 
     return data
-
-
