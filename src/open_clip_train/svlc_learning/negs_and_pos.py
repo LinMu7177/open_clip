@@ -12,6 +12,7 @@ from transformers import pipeline
 import spacy
 import string
 from torch import distributed as dist
+import json
 
 def is_positive(attr, texts):
     positives_in_cap = [c for c in attr if c in texts]
@@ -23,18 +24,12 @@ class BothNegatives(object):
         self.NegativesLLM = NegativesLLM(args)
         self.args = args
 
-    def create_negs(self, sample):
+    def create_negs(self, sample, neg_type=None):
         neg_type_curr = random.choice([0,1])
         if neg_type_curr == 0:
             negatives = self.Negatives.create_negs(sample)
         else:
-            # negatives = self.NegativesLLM.create_negs(caption)
-            neg_txt_keys = [key for key, value in sample.items() if 'neg_txt' in key and value]
-            if neg_txt_keys:
-                selected_key = random.choice(neg_txt_keys)
-                negatives = [str(sample[selected_key]).encode().decode('utf-8')]
-            else:
-                return [''] * self.args.num_negs
+            negatives = self.NegativesLLM.create_negs(sample)
         return negatives
 
 class Negatives(object):
@@ -71,48 +66,62 @@ class Negatives(object):
 
 class NegativesLLM(object):
     def __init__(self,args ) -> None:
-        self.classifier = pipeline("fill-mask")
         self.args = args
-        self.nlp = spacy.load("en_core_web_sm")
 
     def create_negs(self,sample):
-        caption = sample['text']
-        if len(caption) > 512:
-            caption = caption[:100]
-        neg_attr_text = []
-        clean_caption = " ".join(caption.translate(str.maketrans('', '', string.punctuation)).split())
-        doc = self.nlp(clean_caption)
-        # Analyze syntax
-        positives_in_cap = [token.text for token in doc if token.pos_ in self.args.llm_neg_types]
-        positives_in_cap = list(set(positives_in_cap) - (set(positives_in_cap) - set(caption.split()))) #filter one letter and weird mistakes of spacy
-        if len(positives_in_cap) > 0:
-            neg_attr_text = []
-            for i in range(self.args.num_negs):
-                attr_to_change = positives_in_cap[random.randint(0, len(positives_in_cap) - 1)]
-                pos_incides = np.nonzero([1 if (w == attr_to_change) else 0 for w in clean_caption.split()])[0]
-                index_to_change = random.choice(pos_incides)
-                list_clean_cap = clean_caption.split()
-                list_clean_cap[index_to_change] = '<mask>'
-                fill_mask_list = self.classifier(' '.join(list_clean_cap))
-                # try:
-                #     pos_incides = np.nonzero([1 if (w == attr_to_change) else 0 for w in clean_caption.split()])[0]
-                #     index_to_change = random.choice(pos_incides)
-                #     list_clean_cap = clean_caption.split()
-                #     list_clean_cap[index_to_change] = '<mask>'
-                #     fill_mask_list = self.classifier(' '.join(list_clean_cap))
-                # except:
-                #     print('fill-mask issue')
-                try:
-                    filttered_from_GT = [item for item in fill_mask_list if not (item["token_str"].strip(' ') == attr_to_change)]
-                    negative_caption = filttered_from_GT[random.randint(0, len(filttered_from_GT) - 1)][
-                        "sequence"]#[-1]
-                    neg_attr_text.append(negative_caption)
-                except:
-                    print('post_process negs issue')
-        if neg_attr_text != []:
-            return neg_attr_text
+        neg_txt_keys = [key for key, value in sample.items() if 'neg_txt' in key and value]
+        if neg_txt_keys:
+            selected_key = random.choice(neg_txt_keys)
+            negs = json.loads(sample[selected_key])
+            negatives = [str(v).encode().decode('utf-8') for v in negs]
+            return negatives
         else:
             return [''] * self.args.num_negs
+
+# class NegativesLLM(object):
+#     def __init__(self,args ) -> None:
+#         self.classifier = pipeline("fill-mask")
+#         self.args = args
+#         self.nlp = spacy.load("en_core_web_sm")
+
+#     def create_negs(self,sample):
+#         caption = sample['text']
+#         if len(caption) > 512:
+#             caption = caption[:100]
+#         neg_attr_text = []
+#         clean_caption = " ".join(caption.translate(str.maketrans('', '', string.punctuation)).split())
+#         doc = self.nlp(clean_caption)
+#         # Analyze syntax
+#         positives_in_cap = [token.text for token in doc if token.pos_ in self.args.llm_neg_types]
+#         positives_in_cap = list(set(positives_in_cap) - (set(positives_in_cap) - set(caption.split()))) #filter one letter and weird mistakes of spacy
+#         if len(positives_in_cap) > 0:
+#             neg_attr_text = []
+#             for i in range(self.args.num_negs):
+#                 attr_to_change = positives_in_cap[random.randint(0, len(positives_in_cap) - 1)]
+#                 pos_incides = np.nonzero([1 if (w == attr_to_change) else 0 for w in clean_caption.split()])[0]
+#                 index_to_change = random.choice(pos_incides)
+#                 list_clean_cap = clean_caption.split()
+#                 list_clean_cap[index_to_change] = '<mask>'
+#                 fill_mask_list = self.classifier(' '.join(list_clean_cap))
+#                 # try:
+#                 #     pos_incides = np.nonzero([1 if (w == attr_to_change) else 0 for w in clean_caption.split()])[0]
+#                 #     index_to_change = random.choice(pos_incides)
+#                 #     list_clean_cap = clean_caption.split()
+#                 #     list_clean_cap[index_to_change] = '<mask>'
+#                 #     fill_mask_list = self.classifier(' '.join(list_clean_cap))
+#                 # except:
+#                 #     print('fill-mask issue')
+#                 try:
+#                     filttered_from_GT = [item for item in fill_mask_list if not (item["token_str"].strip(' ') == attr_to_change)]
+#                     negative_caption = filttered_from_GT[random.randint(0, len(filttered_from_GT) - 1)][
+#                         "sequence"]#[-1]
+#                     neg_attr_text.append(negative_caption)
+#                 except:
+#                     print('post_process negs issue')
+#         if neg_attr_text != []:
+#             return neg_attr_text
+#         else:
+#             return [''] * self.args.num_negs
 
 
 class ChunkSample(Sampler):
