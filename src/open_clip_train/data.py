@@ -1,4 +1,5 @@
 import ast
+from collections import defaultdict
 import json
 import logging
 import math
@@ -18,7 +19,7 @@ import torch
 import torchvision.datasets as datasets
 import webdataset as wds
 from PIL import Image
-from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, IterableDataset, get_worker_info
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, IterableDataset, get_worker_info, ConcatDataset
 from torch.utils.data.distributed import DistributedSampler
 from webdataset.filters import _shuffle
 from webdataset.tariterators import base_plus_ext, url_opener, tar_file_expander, valid_sample
@@ -31,7 +32,7 @@ from torchvision.transforms.functional import InterpolationMode
 import torchvision.transforms.functional as F
 # from torchvision.transforms.transforms import JointRandomResizedCrop
 
-from open_clip_train.svlc_learning.negs_and_pos import Negatives,NegativesLLM, ChunkSample,BothNegatives
+from open_clip_train.svlc_learning.negs_and_pos import Negatives, NegativesLLM, ChunkSample, BothNegatives
 
 from torch import Tensor
 from collections.abc import Sequence
@@ -232,11 +233,12 @@ class CsvDataset(Dataset):
 
 
 class JsonlDataset(Dataset):
-    def __init__(self, input_filename, transforms, tokenizer=None, objects_sense_format=None, objects_data=None, is_train=False):
+    def __init__(self, input_filename, transforms, tokenizer=None, objects_sense_format=None, objects_data=None, is_train=False, num_negs=0):
         logging.debug(f'Loading jsonl data from {input_filename}.')
         with open(input_filename, 'r') as f:
             lines = f.readlines()
         self.data = [json.loads(line) for line in lines]
+        self.dataset_name = os.path.basename(input_filename).split('.')[0]
         self.transforms = transforms
         logging.debug('Done loading data.')
 
@@ -245,26 +247,41 @@ class JsonlDataset(Dataset):
         self.objects_sense_format = objects_sense_format
         self.objects_data = objects_data
         self.is_train = is_train
+        self.num_negs = num_negs
 
     def __len__(self):
         return len(self.data)
-
-    def __getitem__(self, idx):
-        image_path = self.data[idx]['img']
-        images = self.transforms(Image.open(image_path))
-        texts = self.tokenize([self.data[idx]['positive_sample']])[0]
-
-        res = [images, texts]
-        if self.objects_sense_format:
+    
+    def get_key(self, image_path):
+        if self.dataset_name == 'SpatialSense':
             dirname = os.path.basename(os.path.dirname(image_path))
             filename = os.path.splitext(os.path.basename(image_path))[0]
             key = os.path.join(dirname, filename)
+        elif self.dataset_name == 'CLEVR':
+            key = os.path.splitext(os.path.basename(image_path))[0]
+        return key
+
+    def __getitem__(self, idx):
+        image_path = self.data[idx]['img']
+        images = Image.open(image_path)
+        texts = self.tokenize([self.data[idx]['positive_sample']])[0]
+
+        # Add objects_sense
+        if self.objects_sense_format:
+            key = self.get_key(image_path)
             objects_sense = get_objects_sense(key, images, self.objects_sense_format, self.objects_data)
+            images = self.transforms(images)
             sample = join_preprocess({"image": images, "objects_sense": objects_sense})
             res = [sample["image"], texts, sample["objects_sense"]]
-        
-        if self.is_train:
-            res.append(self.tokenize(self.data[idx]['negative_samples']))
+        else:
+            res = [self.transforms(images), texts]
+
+        # Add negatives
+        if self.is_train and self.num_negs:
+            negatives = self.data[idx]['negative_samples']
+            if len(negatives) == 0:
+                negatives = [""] * self.num_negs
+            res.append(self.tokenize(negatives))
         return tuple(res)
 
 
@@ -771,7 +788,8 @@ def get_jsonl_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None, **
         tokenizer=tokenizer,
         objects_sense_format=args.objects_sense_format,
         objects_data=args.objects_data,
-        is_train=is_train
+        is_train=is_train,
+        num_negs=args.num_negs
     )
     num_samples = len(dataset)
     sampler = DistributedSampler(dataset) if args.distributed and is_train else None
@@ -886,4 +904,53 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
     if args.imagenet_v2 is not None:
         data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
 
+    return data
+
+import yaml
+def get_data_new(args, preprocess_fns, epoch=0, tokenizer=None):
+    preprocess_train, preprocess_val = preprocess_fns
+
+    with open('datasets.yaml', 'r') as file:
+        datasets_info = yaml.safe_load(file)
+    negs_creator = choose_negs_function(args)
+
+    data = defaultdict(list)
+    for name, info in datasets_info.items():
+        logging.debug(f'Loading dataset: {name}.')
+        if info.get('train_data') or info.get('dataset_type') == "synthetic":
+            data['train'].append(get_dataset_fn(info.get('train_data'), info.get('dataset_type'))(
+                args, info['train_data'], info['objects_data'], preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator,
+                num_workers=args.train_num_workers))
+        
+        if info.get('val_data'):
+            data['val'].append(get_dataset_fn(info.get('val_data'), info.get('dataset_type'))(
+                args, info['train_data'], info['objects_data'], preprocess_val, is_train=False, tokenizer=tokenizer, num_workers=args.val_num_workers))
+        
+        if info.get('imagenet_val'):
+            data['imagenet-val'].append(get_imagenet(args, preprocess_fns, "val"))
+        
+        if info.get('imagenet_v2'):
+            data['imagenet-v2'].append(get_imagenet(args, preprocess_fns, "v2"))
+
+    for dataset_type, datasets in data.items():
+        concat_dataset = ConcatDataset(datasets)
+        is_train = dataset_type == 'train'
+
+        num_samples = len(concat_dataset)
+        sampler = DistributedSampler(concat_dataset) if args.distributed and is_train else None
+        shuffle = is_train and sampler is None
+
+        dataloader = DataLoader(
+            concat_dataset,
+            batch_size=args.batch_size,
+            shuffle=shuffle,
+            num_workers=args.workers,
+            pin_memory=True,
+            sampler=sampler,
+            drop_last=is_train,
+        )
+        dataloader.num_samples = num_samples
+        dataloader.num_batches = len(dataloader)
+
+        data[dataset_type] = DataInfo(dataloader, sampler)
     return data
