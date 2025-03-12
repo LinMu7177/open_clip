@@ -67,6 +67,7 @@ class Negatives(object):
 class NegativesLLM(object):
     def __init__(self,args ) -> None:
         self.args = args
+        self.Negatives = Negatives(args)
 
     def create_negs(self,sample):
         neg_txt_keys = [key for key, value in sample.items() if 'neg_txt' in key and value]
@@ -76,7 +77,9 @@ class NegativesLLM(object):
             negatives = [str(v).encode().decode('utf-8') for v in negs]
             return negatives
         else:
-            return [''] * self.args.num_negs
+            # return [''] * self.args.num_negs
+            # rule-based
+            return self.Negatives.create_negs(sample)
 
 # class NegativesLLM(object):
 #     def __init__(self,args ) -> None:
