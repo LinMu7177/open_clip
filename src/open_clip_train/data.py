@@ -37,6 +37,7 @@ from torch import Tensor
 from collections.abc import Sequence
 from typing import List, Tuple
 
+
 try:
     import horovod.torch as hvd
 except ImportError:
@@ -530,6 +531,202 @@ def get_objects_sense(key, image, objects_sense_format, objects_data):
     return edges
 
 
+def get_multi_wds_dataset(
+    args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None, num_workers=4
+):
+    """
+    将多个 WebDataset 数据源按指定比例混合，返回一个 DataInfo 对象，
+    其中 DataInfo 内含混合之后的 dataloader 以及 shared_epoch。
+    """
+    if is_train:
+        input_shards_list = [
+            args.train_data,
+            args.train_data_add
+        ]
+    else:
+        input_shards_list = [
+            args.val_data,
+            args.val_data_add
+        ]
+
+    ratios = args.multi_wds_ratios
+    resampled = getattr(args, 'dataset_resampled', False) and is_train
+
+    if is_train:
+        num_samples_list = [
+            args.train_num_samples,
+            args.train_add_num_samples
+        ]
+    else:
+        num_samples_list = [
+            args.val_num_samples,
+            args.val_add_num_samples
+        ]
+
+    total_num_samples = sum(num_samples_list)
+    shared_epoch = SharedEpoch(epoch=epoch)
+
+    pipelines = []
+    for idx, input_shards in enumerate(input_shards_list):
+        if resampled and is_train:
+            _pipe = [
+                ResampledShards2(
+                    input_shards,
+                    weights=None,
+                    deterministic=True,
+                    epoch=shared_epoch
+                )
+            ]
+        else:
+            _pipe = [wds.SimpleShardList(input_shards)]
+
+        if is_train:
+            if not resampled:
+                _pipe.extend([
+                    detshuffle2(
+                        bufsize=_SHARD_SHUFFLE_SIZE,
+                        initial=_SHARD_SHUFFLE_INITIAL,
+                        seed=args.seed,
+                        epoch=shared_epoch,
+                    ),
+                    wds.split_by_node,
+                    wds.split_by_worker,
+                ])
+            _pipe.extend([
+                tarfile_to_samples_nothrow,
+                wds.shuffle(
+                    bufsize=_SAMPLE_SHUFFLE_SIZE,
+                    initial=_SAMPLE_SHUFFLE_INITIAL,
+                ),
+            ])
+        else:
+            _pipe.extend([
+                wds.split_by_worker,
+                wds.tarfile_to_samples(handler=log_and_continue),
+            ])
+
+        if args.objects_sense_format:
+            objects_data = args.objects_data
+            if "CLEVR" in input_shards:
+                objects_data = args.objects_add_data
+
+            if is_train:
+                preprocess_img.transforms = preprocess_img.transforms[1:]
+                _pipe.extend([
+                    wds.select(filter_no_caption_or_no_image),
+                    wds.decode("pilrgb", handler=log_and_continue),
+                    wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
+                    wds.map(lambda sample, objects_data=objects_data: {
+                        **sample,
+                        'objects_sense': get_objects_sense(
+                            sample['key'],
+                            sample['image'],
+                            args.objects_sense_format,
+                            objects_data
+                        )
+                    }),
+                    wds.map(join_preprocess)
+                ])
+
+                if args.vl_negs:
+                    _pipe.extend([
+                        wds.map(lambda sample: {
+                            **sample,
+                            'negatives': negs_creator.create_negs(sample)
+                        }),
+                        wds.map_dict(
+                            image=preprocess_img,
+                            text=lambda text: tokenizer(text)[0],
+                            negatives=lambda negatives: tokenizer(negatives)
+                        ),
+                        wds.to_tuple("image", "text", "objects_sense", "negatives"),
+                        wds.batched(args.batch_size, partial=not is_train)
+                    ])
+                else:
+                    _pipe.extend([
+                        wds.map_dict(
+                            image=preprocess_img,
+                            text=lambda text: tokenizer(text)[0]
+                        ),
+                        wds.to_tuple("image", "text", "objects_sense"),
+                        wds.batched(args.batch_size, partial=not is_train)
+                    ])
+            else:
+                preprocess_objects_val = copy.deepcopy(preprocess_img)
+                preprocess_objects_val.transforms = preprocess_objects_val.transforms[:2]
+                _pipe.extend([
+                    wds.select(filter_no_caption_or_no_image),
+                    wds.decode("pilrgb", handler=log_and_continue),
+                    wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
+                    wds.map(lambda sample, objects_data=objects_data: {
+                        **sample,
+                        'objects_sense': get_objects_sense(
+                            sample['key'],
+                            sample['image'],
+                            args.objects_sense_format,
+                            objects_data
+                        )
+                    }),
+                    wds.map_dict(
+                        image=preprocess_img,
+                        text=lambda text: tokenizer(text)[0],
+                        objects_sense=preprocess_objects_val
+                    ),
+                    wds.to_tuple("image", "text", "objects_sense"),
+                    wds.batched(args.batch_size, partial=not is_train)
+                ])
+        else:
+            _pipe.extend([
+                wds.select(filter_no_caption_or_no_image),
+                wds.decode("pilrgb", handler=log_and_continue),
+                wds.rename(image="jpg;png;jpeg;webp", text="txt"),
+                wds.map_dict(
+                    image=preprocess_img,
+                    text=lambda text: tokenizer(text)[0]
+                ),
+                wds.to_tuple("image", "text"),
+                wds.batched(args.batch_size, partial=not is_train)
+            ])
+
+        pipelines.append(wds.DataPipeline(*_pipe))
+
+    # 用 mux 把多个 pipeline 混合
+    # ratios 是一个列表，比如 [0.7, 0.3] 代表从 pipeline1, pipeline2 取数据的比例
+    merged_pipeline = wds.RandomMix(pipelines, ratios)
+
+
+    # -- 计算 train/val num_batches 的逻辑，与单个 get_wds_dataset 类似 --
+    if is_train:
+        # 同样需要算总的 batch 数等，用 total_num_samples
+        global_batch_size = args.batch_size * args.world_size
+        round_fn = math.floor if floor else math.ceil
+        num_batches = round_fn(total_num_samples / global_batch_size)
+        num_workers = max(1, args.workers)
+        num_worker_batches = round_fn(num_batches / num_workers)
+        num_batches = num_worker_batches * num_workers
+        final_num_samples = num_batches * global_batch_size
+
+        merged_pipeline = wds.DataPipeline(merged_pipeline)
+        merged_pipeline = merged_pipeline.with_epoch(num_worker_batches)
+
+    else:
+        num_batches = math.ceil(total_num_samples / args.batch_size)
+        final_num_samples = total_num_samples
+
+    dataloader = wds.WebLoader(
+        merged_pipeline,
+        batch_size=None,
+        shuffle=False,
+        num_workers=num_workers,
+        persistent_workers=num_workers > 0,
+    )
+    dataloader.num_batches = num_batches
+    dataloader.num_samples = final_num_samples
+
+    return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
+
+
+
 def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None,
                     num_workers=4):
     input_shards = args.train_data if is_train else args.val_data
@@ -554,7 +751,7 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
 
     if is_train and args.train_data_upsampling_factors is not None:
         assert resampled, "--train_data_upsampling_factors is only supported when sampling with replacement (with --dataset-resampled)."
-    
+
     if resampled:
         pipeline = [ResampledShards2(
             input_shards,
@@ -673,20 +870,6 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
         persistent_workers=num_workers > 0,
     )
 
-    # FIXME not clear which approach is better, with_epoch before vs after dataloader?
-    # hoping to resolve via https://github.com/webdataset/webdataset/issues/169
-    # if is_train:
-    #     # roll over and repeat a few samples to get same number of full batches on each node
-    #     global_batch_size = args.batch_size * args.world_size
-    #     num_batches = math.ceil(num_samples / global_batch_size)
-    #     num_workers = max(1, args.workers)
-    #     num_batches = math.ceil(num_batches / num_workers) * num_workers
-    #     num_samples = num_batches * global_batch_size
-    #     dataloader = dataloader.with_epoch(num_batches)
-    # else:
-    #     # last batches are partial, eval is done on single (master) node
-    #     num_batches = math.ceil(num_samples / args.batch_size)
-
     # add meta-data to dataloader instance for convenience
     dataloader.num_batches = num_batches
     dataloader.num_samples = num_samples
@@ -777,6 +960,8 @@ def get_synthetic_dataset(args, preprocess_fn, is_train, epoch=0, tokenizer=None
 def get_dataset_fn(data_path, dataset_type):
     if dataset_type == "webdataset":
         return get_wds_dataset
+    elif dataset_type == "multi_webdataset":
+        return get_multi_wds_dataset
     elif dataset_type == "csv":
         return get_csv_dataset
     elif dataset_type == "synthetic":
