@@ -61,7 +61,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "--dataset-type",
-        choices=["webdataset", "csv", "synthetic", "auto", "jsonl"],
+        choices=["webdataset", "multi_webdataset", "csv", "synthetic", "auto", "jsonl"],
         default="auto",
         help="Which type of dataset to process."
     )
@@ -517,6 +517,24 @@ def parse_args(args):
     parser.add_argument("--num-negs", default=1, type=int, help="number of negative examples", )
     parser.add_argument("--no_neg_in_contrastive", default=False, action="store_true", help="no_neg_in_contrastive")
     parser.add_argument("--neg_w", type=int, default=1, help="negative loss weighting")
+
+    parser.add_argument("--train-data-add", default=None, type=str, help="Path/pattern for the second WebDataset data source used in multi_webdataset training")
+    parser.add_argument("--val-data-add", default=None, type=str, help="Path/pattern for the second WebDataset data source used in multi_webdataset validation")
+    parser.add_argument("--multi-wds-ratios", nargs="+", type=float, default=[0.7,0.3], help="Ratios for mixing multiple WebDataset sources in training, e.g. 0.7 0.3 for a 70/30 mixture.")
+    parser.add_argument("--objects-add-data", type=str, default=None, help="Path to file(s) with objects data")
+    parser.add_argument(
+        "--train-add-num-samples",
+        type=int,
+        default=None,
+        help="Number of samples in additional dataset. Required for webdataset if not available in info file.",
+    )
+    parser.add_argument(
+        "--val-add-num-samples",
+        type=int,
+        default=None,
+        help="Number of samples in additional dataset. Required for webdataset if not available in info file.",
+    )
+
 
     args = parser.parse_args(args)
 
