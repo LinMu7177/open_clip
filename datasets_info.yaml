@@ -1,0 +1,10 @@
+CC3M:
+  train_data: /mnt/shared/data/CC3M/cc3m_neg_qwen/{00000..00320}.tar
+  val_data: /mnt/shared/data/CC3M/cc3m_neg_qwen/{00329..00330}.tar
+  objects_data: /mnt/shared/data/DINO_SAM2_Data/cc3m/
+  dataset_type: webdataset
+Spatial_Sence:
+  train_data: /home/yifei/code/Qwen_Labeler/output/SpatialSense.jsonl
+  val_data: /home/yifei/code/Qwen_Labeler/output/SpatialSense.jsonl
+  objects_data: /mnt/shared/data/DINO_SAM2_Data/SpatialSense/
+  dataset_type: jsonl
