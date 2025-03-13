@@ -534,6 +534,7 @@ def parse_args(args):
         default=None,
         help="Number of samples in additional dataset. Required for webdataset if not available in info file.",
     )
+    parser.add_argument("--dataset_info", type=str, default=None, help="Path to dataset info file.")
 
 
     args = parser.parse_args(args)

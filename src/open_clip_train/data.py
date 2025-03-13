@@ -594,36 +594,16 @@ def get_multi_wds_dataset(
     将多个 WebDataset 数据源按指定比例混合，返回一个 DataInfo 对象，
     其中 DataInfo 内含混合之后的 dataloader 以及 shared_epoch。
     """
-    if is_train:
-        input_shards_list = [
-            args.train_data,
-            args.train_data_add
-        ]
-    else:
-        input_shards_list = [
-            args.val_data,
-            args.val_data_add
-        ]
-
-    ratios = args.multi_wds_ratios
+    with open(args.dataset_info, 'r') as file:
+        datasets_info = yaml.safe_load(file)
+    
+    pipelines, ratios = [], []
+    total_num_samples = 0
     resampled = getattr(args, 'dataset_resampled', False) and is_train
-
-    if is_train:
-        num_samples_list = [
-            args.train_num_samples,
-            args.train_add_num_samples
-        ]
-    else:
-        num_samples_list = [
-            args.val_num_samples,
-            args.val_add_num_samples
-        ]
-
-    total_num_samples = sum(num_samples_list)
     shared_epoch = SharedEpoch(epoch=epoch)
 
-    pipelines = []
-    for idx, input_shards in enumerate(input_shards_list):
+    for name, info in datasets_info.items():
+        input_shards = info['train_data'] if is_train else info['val_data']
         if resampled and is_train:
             _pipe = [
                 ResampledShards2(
@@ -662,9 +642,7 @@ def get_multi_wds_dataset(
             ])
 
         if args.objects_sense_format:
-            objects_data = args.objects_data
-            if "CLEVR" in input_shards:
-                objects_data = args.objects_add_data
+            objects_data = info['objects_data']
 
             if is_train:
                 preprocess_img.transforms = preprocess_img.transforms[1:]
@@ -744,14 +722,15 @@ def get_multi_wds_dataset(
                 wds.batched(args.batch_size, partial=not is_train)
             ])
 
+        # update
         pipelines.append(wds.DataPipeline(*_pipe))
+        ratios.append(info['ratio'])
+        total_num_samples += info['train_num_samples'] if is_train else info['val_num_samples']
 
-    # 用 mux 把多个 pipeline 混合
+    # 用 mix 把多个 pipeline 混合
     # ratios 是一个列表，比如 [0.7, 0.3] 代表从 pipeline1, pipeline2 取数据的比例
     merged_pipeline = wds.RandomMix(pipelines, ratios)
 
-
-    # -- 计算 train/val num_batches 的逻辑，与单个 get_wds_dataset 类似 --
     if is_train:
         # 同样需要算总的 batch 数等，用 total_num_samples
         global_batch_size = args.batch_size * args.world_size
@@ -776,9 +755,10 @@ def get_multi_wds_dataset(
         num_workers=num_workers,
         persistent_workers=num_workers > 0,
     )
+
     dataloader.num_batches = num_batches
     dataloader.num_samples = final_num_samples
-
+    
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
 
 
