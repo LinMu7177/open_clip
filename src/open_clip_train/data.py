@@ -727,9 +727,12 @@ def get_multi_wds_dataset(
         ratios.append(info['ratio'])
         total_num_samples += info['train_num_samples'] if is_train else info['val_num_samples']
 
-    # 用 mix 把多个 pipeline 混合
-    # ratios 是一个列表，比如 [0.7, 0.3] 代表从 pipeline1, pipeline2 取数据的比例
-    merged_pipeline = wds.RandomMix(pipelines, ratios)
+
+    # TODO 选择不同的数据集混合方式
+    # merged_pipeline = wds.RandomMix(pipelines, ratios, longest=True)
+    # merge_pipeline = wds.RoundRobin(pipelines, longest=True)
+    merged_pipeline = wds.ConcatMix(pipelines)
+
 
     if is_train:
         # 同样需要算总的 batch 数等，用 total_num_samples
