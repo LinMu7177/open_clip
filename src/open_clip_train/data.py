@@ -643,9 +643,9 @@ def get_multi_wds_dataset(
 
         if args.objects_sense_format:
             objects_data = info['objects_data']
-
             if is_train:
-                preprocess_img.transforms = preprocess_img.transforms[1:]
+                preprocess_img_train = copy.deepcopy(preprocess_img)
+                preprocess_img_train.transforms = preprocess_img.transforms[1:]
                 _pipe.extend([
                     wds.select(filter_no_caption_or_no_image),
                     wds.decode("pilrgb", handler=log_and_continue),
@@ -669,7 +669,7 @@ def get_multi_wds_dataset(
                             'negatives': negs_creator.create_negs(sample)
                         }),
                         wds.map_dict(
-                            image=preprocess_img,
+                            image=preprocess_img_train,
                             text=lambda text: tokenizer(text)[0],
                             negatives=lambda negatives: tokenizer(negatives)
                         ),
@@ -679,7 +679,7 @@ def get_multi_wds_dataset(
                 else:
                     _pipe.extend([
                         wds.map_dict(
-                            image=preprocess_img,
+                            image=preprocess_img_train,
                             text=lambda text: tokenizer(text)[0]
                         ),
                         wds.to_tuple("image", "text", "objects_sense"),
@@ -729,9 +729,9 @@ def get_multi_wds_dataset(
 
 
     # TODO 选择不同的数据集混合方式
-    # merged_pipeline = wds.RandomMix(pipelines, ratios, longest=True)
+    merged_pipeline = wds.RandomMix(pipelines, ratios, longest=True)
     # merge_pipeline = wds.RoundRobin(pipelines, longest=True)
-    merged_pipeline = wds.ConcatMix(pipelines)
+    # merged_pipeline = wds.ConcatMix(pipelines)
 
 
     if is_train:

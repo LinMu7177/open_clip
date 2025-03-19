@@ -1,20 +1,21 @@
-CC3M:
-  train_data: /mnt/shared/data/CC3M/cc3m_neg_qwen/{00000..00320}.tar
-  val_data: /mnt/shared/data/CC3M/cc3m_neg_qwen/{00329..00330}.tar
-  objects_data: /mnt/shared/data/DINO_SAM2_Data/cc3m/
-  train_num_samples: 2190000
-  val_num_samples: 13607
+Spatial_Sence:
+  train_data: /mnt/shared/data/SpatialSense_webdataset/{00000..00001}.tar
+  val_data: /mnt/shared/data/SpatialSense_webdataset/{00000..00001}.tar
+  objects_data: /mnt/shared/data/DINO_SAM2_Data/SpatialSense/
+  train_num_samples: 8749
+  val_num_samples: 8749
   ratio: 1.0
 CLEVR:
   train_data: /mnt/shared/data/CLEVR_neg/{00000..00004}.tar
   val_data: /mnt/shared/data/CLEVR_neg/00004.tar
   objects_data: /mnt/shared/data/DINO_SAM2_Data/CLEVR_Sample_Data/
   train_num_samples: 32000
-  val_num_samples: 16000
-  ratio: 1.0
-
-# Spatial_Sence:
-#   train_data: /home/yifei/code/Qwen_Labeler/output/SpatialSense.jsonl
-#   val_data: /home/yifei/code/Qwen_Labeler/output/SpatialSense.jsonl
-#   objects_data: /mnt/shared/data/DINO_SAM2_Data/SpatialSense/
-#   dataset_type: jsonl
+  val_num_samples: 8000
+  ratio: 0.3
+CC3M:
+  train_data: /mnt/shared/data/CC3M/cc3m_neg_qwen/{00000..00320}.tar
+  val_data: /mnt/shared/data/CC3M/cc3m_neg_qwen/{00329..00330}.tar
+  objects_data: /mnt/shared/data/DINO_SAM2_Data/cc3m/
+  train_num_samples: 2190000
+  val_num_samples: 13607
+  ratio: 0.7
