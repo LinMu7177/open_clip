@@ -133,25 +133,10 @@ class JointRandomResizedCrop(torch.nn.Module):
         return i, j, h, w
 
     def forward(self, sample: dict) -> dict:
-        """
-        Args:
-            sample (dict): 包含 "image" 和 "mask" 的字典:
-                sample["image"]: PIL.Image 或 Tensor
-                sample["objects_sense"]:  PIL.Image 或 Tensor
-            其他键值可以自行存放在这个字典里，本函数只会操作 "image" 和 "mask"。
-
-        Returns:
-            dict: 返回同一个字典，其中 "image" 和 "mask" 都经过随机裁剪 & resize。
-        """
-        # 取出图像与mask
         img = sample["image"]
         msk = sample["objects_sense"]
-
-        # 1) 先得到随机裁剪参数
         i, j, h, w = self.get_params(img, self.scale, self.ratio)
 
-        # 2) 对图像进行随机裁剪+resize
-        #   - 双线性/双三次插值可以使用 antialias=True
         img = F.resized_crop(
             img, i, j, h, w,
             self.size,
@@ -159,9 +144,6 @@ class JointRandomResizedCrop(torch.nn.Module):
             antialias=self.antialias
         )
 
-        # 3) 对mask进行相同的随机裁剪+resize
-        #   - 对mask通常用最近邻插值 (mask_interpolation) 并禁用 antialias
-        #   - 避免将分类标签插值为非整数
         msk = F.resized_crop(
             msk, i, j, h, w,
             self.size,
@@ -169,7 +151,6 @@ class JointRandomResizedCrop(torch.nn.Module):
             antialias=self.mask_antialias
         )
 
-        # 4) 放回 sample
         sample["image"] = img
         sample["objects_sense"] = msk
         return sample
@@ -690,14 +671,9 @@ def get_multi_wds_dataset(
 
         pipelines.append(wds.DataPipeline(*_pipe))
 
-    # 用 mux 把多个 pipeline 混合
-    # ratios 是一个列表，比如 [0.7, 0.3] 代表从 pipeline1, pipeline2 取数据的比例
     merged_pipeline = wds.RandomMix(pipelines, ratios)
 
-
-    # -- 计算 train/val num_batches 的逻辑，与单个 get_wds_dataset 类似 --
     if is_train:
-        # 同样需要算总的 batch 数等，用 total_num_samples
         global_batch_size = args.batch_size * args.world_size
         round_fn = math.floor if floor else math.ceil
         num_batches = round_fn(total_num_samples / global_batch_size)
