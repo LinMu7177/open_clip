@@ -40,13 +40,13 @@ class Negatives(object):
 
     def create_negs(self,sample):
         caption = sample['text']
-        negs = len(self.args.vl_neg_type) * [0]
-        for ind, neg_type in enumerate(self.args.vl_neg_type):
+        negs = len(self.args.rule_neg_type) * [0]
+        for ind, neg_type in enumerate(self.args.rule_neg_type):
             negs[ind] = int(
                 is_positive(self.dict_lists[neg_type], caption))  # what attributes are in the text
         negs_possible_types = np.nonzero(negs)[0]  # what are the possible attributes types
         selected_type = random.choice(negs_possible_types) if len(negs_possible_types) != 0 else 0
-        neg_type = self.args.vl_neg_type[
+        neg_type = self.args.rule_neg_type[
             selected_type]  # choose random attribute from the possible ones to be the positive type
 
         attributes = self.dict_lists[neg_type]

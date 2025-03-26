@@ -38,6 +38,7 @@ from torch import Tensor
 from collections.abc import Sequence
 from typing import List, Tuple
 
+import yaml
 
 try:
     import horovod.torch as hvd
@@ -568,10 +569,14 @@ class ResampledShards2(IterableDataset):
 
 def load_edges(edges_demo_path, image_shape):
     if os.path.exists(edges_demo_path):
-        with open(edges_demo_path, 'rb') as f:
-            combined_edges = pickle.load(f)
-        rle = {'size': combined_edges['size'], 'counts': combined_edges['counts']}
-        mask = mask_util.decode(rle)
+        try:
+            with open(edges_demo_path, 'rb') as f:
+                combined_edges = pickle.load(f)
+            rle = {'size': combined_edges['size'], 'counts': combined_edges['counts']}
+            mask = mask_util.decode(rle)
+        except Exception as e:
+            logging.error(f'Error loading edges from {edges_demo_path}: {e}')
+            mask = np.ones(image_shape[:2], dtype=np.uint8)
         return mask
     else:
         return np.ones(image_shape[:2], dtype=np.uint8)
@@ -729,8 +734,8 @@ def get_multi_wds_dataset(
 
 
     # TODO 选择不同的数据集混合方式
-    merged_pipeline = wds.RandomMix(pipelines, ratios, longest=True)
-    # merge_pipeline = wds.RoundRobin(pipelines, longest=True)
+    # merged_pipeline = wds.RandomMix(pipelines, ratios, longest=True)
+    merged_pipeline = wds.RoundRobin(pipelines, longest=True)
     # merged_pipeline = wds.ConcatMix(pipelines)
 
 
@@ -1057,12 +1062,12 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
 
     negs_creator = choose_negs_function(args)
 
-    if args.train_data or args.dataset_type == "synthetic":
+    if args.train_data or args.dataset_type == "synthetic" or args.dataset_type == "multi_webdataset":
         data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
             args, preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator,
             num_workers=args.train_num_workers)
 
-    if args.val_data:
+    if args.val_data or args.dataset_type == 'multi_webdataset':
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
             args, preprocess_val, is_train=False, tokenizer=tokenizer, num_workers=args.val_num_workers)
 
@@ -1072,53 +1077,4 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
     if args.imagenet_v2 is not None:
         data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
 
-    return data
-
-import yaml
-def get_data_new(args, preprocess_fns, epoch=0, tokenizer=None):
-    preprocess_train, preprocess_val = preprocess_fns
-
-    with open('datasets.yaml', 'r') as file:
-        datasets_info = yaml.safe_load(file)
-    negs_creator = choose_negs_function(args)
-
-    data = defaultdict(list)
-    for name, info in datasets_info.items():
-        logging.debug(f'Loading dataset: {name}.')
-        if info.get('train_data') or info.get('dataset_type') == "synthetic":
-            data['train'].append(get_dataset_fn(info.get('train_data'), info.get('dataset_type'))(
-                args, info['train_data'], info['objects_data'], preprocess_train, is_train=True, epoch=epoch, tokenizer=tokenizer, negs_creator=negs_creator,
-                num_workers=args.train_num_workers))
-        
-        if info.get('val_data'):
-            data['val'].append(get_dataset_fn(info.get('val_data'), info.get('dataset_type'))(
-                args, info['train_data'], info['objects_data'], preprocess_val, is_train=False, tokenizer=tokenizer, num_workers=args.val_num_workers))
-        
-        if info.get('imagenet_val'):
-            data['imagenet-val'].append(get_imagenet(args, preprocess_fns, "val"))
-        
-        if info.get('imagenet_v2'):
-            data['imagenet-v2'].append(get_imagenet(args, preprocess_fns, "v2"))
-
-    for dataset_type, datasets in data.items():
-        concat_dataset = ConcatDataset(datasets)
-        is_train = dataset_type == 'train'
-
-        num_samples = len(concat_dataset)
-        sampler = DistributedSampler(concat_dataset) if args.distributed and is_train else None
-        shuffle = is_train and sampler is None
-
-        dataloader = DataLoader(
-            concat_dataset,
-            batch_size=args.batch_size,
-            shuffle=shuffle,
-            num_workers=args.workers,
-            pin_memory=True,
-            sampler=sampler,
-            drop_last=is_train,
-        )
-        dataloader.num_samples = num_samples
-        dataloader.num_batches = len(dataloader)
-
-        data[dataset_type] = DataInfo(dataloader, sampler)
     return data

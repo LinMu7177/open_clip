@@ -307,7 +307,7 @@ def main(args):
     optimizer = None
     scaler = None
 
-    if args.train_data or args.dataset_type == "synthetic":
+    if args.train_data or args.dataset_type == "synthetic" or args.dataset_type == "multi_webdataset":
         assert not args.trace, 'Cannot train with traced model'
 
         opt = getattr(args, 'opt', 'adamw').lower()
@@ -405,6 +405,7 @@ def main(args):
 
     # create scheduler if train
     scheduler = None
+    print("lyf", data)
     if 'train' in data and optimizer is not None:
         total_steps = (data["train"].dataloader.num_batches // args.accum_freq) * args.epochs
         if args.lr_scheduler == "cosine":
