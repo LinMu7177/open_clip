@@ -4,14 +4,11 @@ import logging
 import math
 import os
 import random
-import numbers
-import warnings
 import sys
 import braceexpand
 from dataclasses import dataclass
 from multiprocessing import Value
 
-import copy
 import numpy as np
 import pandas as pd
 import torch
@@ -25,163 +22,13 @@ from webdataset.tariterators import base_plus_ext, url_opener, tar_file_expander
 
 import pickle
 import pycocotools.mask as mask_util
-
-from torchvision.transforms import Normalize
-from torchvision.transforms.functional import InterpolationMode
-import torchvision.transforms.functional as F
-# from torchvision.transforms.transforms import JointRandomResizedCrop
-
+from open_clip_train.data_utils import build_objects_sense_pipeline, build_mutil_objects_sense_pipeline
 from open_clip_train.svlc_learning.negs_and_pos import Negatives,NegativesLLM, ChunkSample,BothNegatives
-
-from torch import Tensor
-from collections.abc import Sequence
-from typing import List, Tuple
-
 
 try:
     import horovod.torch as hvd
 except ImportError:
     hvd = None
-
-def _setup_size(size, error_msg):
-    if isinstance(size, numbers.Number):
-        return int(size), int(size)
-
-    if isinstance(size, Sequence) and len(size) == 1:
-        return size[0], size[0]
-
-    if len(size) != 2:
-        raise ValueError(error_msg)
-
-    return size
-
-class JointRandomResizedCrop(torch.nn.Module):
-    def __init__(
-            self,
-            size,
-            scale=(0.08, 1.0),
-            ratio=(3.0 / 4.0, 4.0 / 3.0),
-            interpolation=InterpolationMode.BILINEAR,
-            antialias: bool = True,
-            mask_interpolation=InterpolationMode.NEAREST,
-            mask_antialias: bool = False
-    ):
-        super().__init__()
-        self.size = _setup_size(size, error_msg="Please provide only two dimensions (h, w) for size.")
-
-        if not isinstance(scale, Sequence):
-            raise TypeError("Scale should be a sequence")
-        if not isinstance(ratio, Sequence):
-            raise TypeError("Ratio should be a sequence")
-        if (scale[0] > scale[1]) or (ratio[0] > ratio[1]):
-            warnings.warn("Scale and ratio should be of kind (min, max)")
-
-        if isinstance(interpolation, int):
-            interpolation = F._interpolation_modes_from_int(interpolation)
-        if isinstance(mask_interpolation, int):
-            mask_interpolation = F._interpolation_modes_from_int(mask_interpolation)
-
-        self.interpolation = interpolation
-        self.antialias = antialias
-        self.scale = scale
-        self.ratio = ratio
-        self.mask_interpolation = mask_interpolation
-        self.mask_antialias = mask_antialias
-
-    @staticmethod
-    def get_params(img: Tensor, scale: List[float], ratio: List[float]) -> Tuple[int, int, int, int]:
-        """Get parameters for ``crop`` for a random sized crop.
-
-        Args:
-            img (PIL Image or Tensor): Input image.
-            scale (list): range of scale of the origin size cropped
-            ratio (list): range of aspect ratio of the origin aspect ratio cropped
-
-        Returns:
-            tuple: params (i, j, h, w) to be passed to ``crop`` for a random
-            sized crop.
-        """
-        _, height, width = F.get_dimensions(img)
-        area = height * width
-
-        log_ratio = torch.log(torch.tensor(ratio))
-        for _ in range(10):
-            target_area = area * torch.empty(1).uniform_(scale[0], scale[1]).item()
-            aspect_ratio = torch.exp(torch.empty(1).uniform_(log_ratio[0], log_ratio[1])).item()
-
-            w = int(round(math.sqrt(target_area * aspect_ratio)))
-            h = int(round(math.sqrt(target_area / aspect_ratio)))
-
-            if 0 < w <= width and 0 < h <= height:
-                i = torch.randint(0, height - h + 1, size=(1,)).item()
-                j = torch.randint(0, width - w + 1, size=(1,)).item()
-                return i, j, h, w
-
-        # Fallback to central crop
-        in_ratio = float(width) / float(height)
-        if in_ratio < min(ratio):
-            w = width
-            h = int(round(w / min(ratio)))
-        elif in_ratio > max(ratio):
-            h = height
-            w = int(round(h * max(ratio)))
-        else:  # whole image
-            w = width
-            h = height
-        i = (height - h) // 2
-        j = (width - w) // 2
-        return i, j, h, w
-
-    def forward(self, sample: dict) -> dict:
-        img = sample["image"]
-        msk = sample["objects_sense"]
-        i, j, h, w = self.get_params(img, self.scale, self.ratio)
-
-        img = F.resized_crop(
-            img, i, j, h, w,
-            self.size,
-            self.interpolation,
-            antialias=self.antialias
-        )
-
-        msk = F.resized_crop(
-            msk, i, j, h, w,
-            self.size,
-            self.mask_interpolation,
-            antialias=self.mask_antialias
-        )
-
-        sample["image"] = img
-        sample["objects_sense"] = msk
-        return sample
-
-    def __repr__(self) -> str:
-        interpolate_str = self.interpolation.value
-        mask_interpolate_str = self.mask_interpolation.value
-        format_string = (
-            f"{self.__class__.__name__}(size={self.size}, "
-            f"scale={tuple(round(s, 4) for s in self.scale)}, "
-            f"ratio={tuple(round(r, 4) for r in self.ratio)}, "
-            f"interpolation={interpolate_str}, "
-            f"antialias={self.antialias}, "
-            f"mask_interpolation={mask_interpolate_str}, "
-            f"mask_antialias={self.mask_antialias})"
-        )
-        return format_string
-
-
-join_preprocess = JointRandomResizedCrop(
-    size=(224, 224),
-    scale=(0.9, 1.0),
-    ratio=(0.75, 1.3333),
-    interpolation=InterpolationMode.BILINEAR,
-    antialias=True,
-    mask_interpolation=InterpolationMode.NEAREST,
-    mask_antialias=False
-)
-
-objects_sense_normalize = Normalize(mean=[0.5], std=[0.26])
-
 
 def choose_negs_function(args):
     if args.neg_type=='llm':
@@ -190,7 +37,6 @@ def choose_negs_function(args):
         return BothNegatives(args)
     else:
         return Negatives(args)
-
 
 class CsvDataset(Dataset):
     def __init__(self, input_filename, transforms, img_key, caption_key, sep="\t", tokenizer=None):
@@ -502,16 +348,6 @@ def load_edges(edges_demo_path, image_shape):
         return np.ones(image_shape[:2], dtype=np.uint8)
 
 
-def get_objects_sense(key, image, objects_sense_format, objects_data):
-    if objects_sense_format == 'edges':
-        objects_sense_path = os.path.join(objects_data, key + '_edges.pkl')
-        edges = load_edges(objects_sense_path, image.size)
-
-    edges = torch.as_tensor(edges).unsqueeze(0).half() * 255
-    edges = objects_sense_normalize(edges)
-    return edges
-
-
 def get_multi_wds_dataset(
     args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None, num_workers=4
 ):
@@ -586,88 +422,8 @@ def get_multi_wds_dataset(
                 wds.tarfile_to_samples(handler=log_and_continue),
             ])
 
-        if args.objects_sense_format:
-            objects_data = args.objects_data
-            if "CLEVR" in input_shards:
-                objects_data = args.objects_add_data
-
-            if is_train:
-                preprocess_img.transforms = preprocess_img.transforms[1:]
-                _pipe.extend([
-                    wds.select(filter_no_caption_or_no_image),
-                    wds.decode("pilrgb", handler=log_and_continue),
-                    wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
-                    wds.map(lambda sample, objects_data=objects_data: {
-                        **sample,
-                        'objects_sense': get_objects_sense(
-                            sample['key'],
-                            sample['image'],
-                            args.objects_sense_format,
-                            objects_data
-                        )
-                    }),
-                    wds.map(join_preprocess)
-                ])
-
-                if args.vl_negs:
-                    _pipe.extend([
-                        wds.map(lambda sample: {
-                            **sample,
-                            'negatives': negs_creator.create_negs(sample)
-                        }),
-                        wds.map_dict(
-                            image=preprocess_img,
-                            text=lambda text: tokenizer(text)[0],
-                            negatives=lambda negatives: tokenizer(negatives)
-                        ),
-                        wds.to_tuple("image", "text", "objects_sense", "negatives"),
-                        wds.batched(args.batch_size, partial=not is_train)
-                    ])
-                else:
-                    _pipe.extend([
-                        wds.map_dict(
-                            image=preprocess_img,
-                            text=lambda text: tokenizer(text)[0]
-                        ),
-                        wds.to_tuple("image", "text", "objects_sense"),
-                        wds.batched(args.batch_size, partial=not is_train)
-                    ])
-            else:
-                preprocess_objects_val = copy.deepcopy(preprocess_img)
-                preprocess_objects_val.transforms = preprocess_objects_val.transforms[:2]
-                _pipe.extend([
-                    wds.select(filter_no_caption_or_no_image),
-                    wds.decode("pilrgb", handler=log_and_continue),
-                    wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
-                    wds.map(lambda sample, objects_data=objects_data: {
-                        **sample,
-                        'objects_sense': get_objects_sense(
-                            sample['key'],
-                            sample['image'],
-                            args.objects_sense_format,
-                            objects_data
-                        )
-                    }),
-                    wds.map_dict(
-                        image=preprocess_img,
-                        text=lambda text: tokenizer(text)[0],
-                        objects_sense=preprocess_objects_val
-                    ),
-                    wds.to_tuple("image", "text", "objects_sense"),
-                    wds.batched(args.batch_size, partial=not is_train)
-                ])
-        else:
-            _pipe.extend([
-                wds.select(filter_no_caption_or_no_image),
-                wds.decode("pilrgb", handler=log_and_continue),
-                wds.rename(image="jpg;png;jpeg;webp", text="txt"),
-                wds.map_dict(
-                    image=preprocess_img,
-                    text=lambda text: tokenizer(text)[0]
-                ),
-                wds.to_tuple("image", "text"),
-                wds.batched(args.batch_size, partial=not is_train)
-            ])
+        _pipe.extend(
+            build_mutil_objects_sense_pipeline(args, is_train, preprocess_img, tokenizer, negs_creator, input_shards))
 
         pipelines.append(wds.DataPipeline(*_pipe))
 
@@ -700,8 +456,6 @@ def get_multi_wds_dataset(
     dataloader.num_samples = final_num_samples
 
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
-
-
 
 def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None,
                     num_workers=4):
@@ -766,58 +520,7 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
             wds.tarfile_to_samples(handler=log_and_continue),
         ])
 
-    if args.objects_sense_format:
-        if is_train:
-            preprocess_img.transforms = preprocess_img.transforms[1:]
-
-            pipeline.extend([
-                wds.select(filter_no_caption_or_no_image),
-                wds.decode("pilrgb", handler=log_and_continue),
-                wds.rename(key="__key__",image="jpg;png;jpeg;webp", text="txt"),
-                wds.map(lambda sample: {**sample, 'objects_sense':
-                    get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
-                # Apply the same random cropping to the image and objects sense
-                wds.map(join_preprocess)
-            ])
-
-            if args.vl_negs:
-                pipeline.extend([
-                    wds.map(lambda sample: {**sample, 'negatives': negs_creator.create_negs(sample)}),
-                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0],
-                                 negatives=lambda negatives: tokenizer(negatives)),
-                    wds.to_tuple("image", "text", "objects_sense", "negatives"),
-                    wds.batched(args.batch_size, partial=not is_train)
-                ])
-            else:
-                pipeline.extend([
-                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-                    wds.to_tuple("image", "text", "objects_sense"),
-                    wds.batched(args.batch_size, partial=not is_train)
-                ])
-        else:
-            preprocess_objects_val = copy.deepcopy(preprocess_img)
-            preprocess_objects_val.transforms = preprocess_objects_val.transforms[:2]
-            pipeline.extend([
-                wds.select(filter_no_caption_or_no_image),
-                wds.decode("pilrgb", handler=log_and_continue),
-                wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
-                wds.map(lambda sample: {**sample, 'objects_sense':
-                    get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
-                # Apply the same random cropping to the image and objects sense
-                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0],
-                             objects_sense=preprocess_objects_val),
-                wds.to_tuple("image", "text", "objects_sense"),
-                wds.batched(args.batch_size, partial=not is_train)
-            ])
-    else:
-        pipeline.extend([
-            wds.select(filter_no_caption_or_no_image),
-            wds.decode("pilrgb", handler=log_and_continue),
-            wds.rename(image="jpg;png;jpeg;webp", text="txt"),
-            wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-            wds.to_tuple("image", "text"),
-            wds.batched(args.batch_size, partial=not is_train)
-        ])
+    pipeline.extend(build_objects_sense_pipeline(args, is_train, preprocess_img, tokenizer, negs_creator))
 
     dataset = wds.DataPipeline(*pipeline)
 

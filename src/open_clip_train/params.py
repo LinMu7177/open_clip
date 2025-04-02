@@ -535,6 +535,8 @@ def parse_args(args):
         help="Number of samples in additional dataset. Required for webdataset if not available in info file.",
     )
 
+    parser.add_argument("--qa", default=False, action="store_true", help="QA Task")
+    parser.add_argument("--answer-csv-path", type=str, default=None, help="Path to answer_csv")
 
     args = parser.parse_args(args)
 

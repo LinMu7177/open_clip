@@ -36,6 +36,7 @@ from open_clip_train.params import parse_args
 from open_clip_train.scheduler import cosine_lr, const_lr, const_lr_cooldown
 from open_clip_train.train import train_one_epoch, evaluate
 from open_clip_train.file_utils import pt_load, check_exists, start_sync_process, remote_sync
+from open_clip_train.data_utils import load_answers, build_answer_mapping
 
 
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
@@ -212,6 +213,14 @@ def main(args):
         #FIXME: support distillation with coca.
         assert 'coca' not in args.model.lower()
 
+    if args.qa:
+        answer_csv_path = args.answer_csv_path
+        all_answers = load_answers(answer_csv_path)
+        answer2idx, idx2answer = build_answer_mapping(all_answers)
+        num_answers = len(all_answers)
+    else:
+        num_answers = 0
+
     if isinstance(args.force_image_size, (tuple, list)) and len(args.force_image_size) == 1:
         # arg is nargs, single (square) image size list -> int
         args.force_image_size = args.force_image_size[0]
@@ -238,6 +247,7 @@ def main(args):
         pretrained_image=args.pretrained_image,
         output_dict=True,
         cache_dir=args.cache_dir,
+        num_answers=num_answers,
         **model_kwargs,
     )
     if args.distill:
@@ -465,6 +475,8 @@ def main(args):
 
         model = torch.compile(original_model)
 
+
+
     if 'train' not in data:
         # If using int8, convert to inference mode.
         if args.use_bnb_linear is not None:
@@ -480,7 +492,7 @@ def main(args):
         if is_master(args):
             logging.info(f'Start epoch {epoch}')
 
-        train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, args.objects_sense_format, tb_writer=writer)
+        train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, args.objects_sense_format, tb_writer=writer, answer2idx=answer2idx)
         completed_epoch = epoch + 1
 
         if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):

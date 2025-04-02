@@ -4,12 +4,12 @@ import random
 from tqdm import tqdm  # 进度条库
 
 # ========== 你可以在这里修改 start_index 和 num_files_to_process ==========
-start_index = 80000
-num_files_to_process = 120000
+start_index =0
+num_files_to_process = 100000
 # ========================================================================
 
 # 设置 JSON 文件所在目录
-input_dir = '/mnt/user_data/wenwen/data/CLEVR_Sample_Data/output_scene_dir'
+input_dir = '/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/output_scene_qa'
 
 
 # 函数：根据文件名解析出其数值索引

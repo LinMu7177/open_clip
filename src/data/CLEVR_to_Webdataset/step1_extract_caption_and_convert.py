@@ -2,14 +2,14 @@ import os
 import json
 from PIL import Image
 
-input_image_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/images_80000_199999"
-input_json_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/output_scene_dir"
-output_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/cc3m_style_dataset_80000_199999"
+input_image_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/images"
+input_json_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/output_scene_qa"
+output_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/cc3m_style_dataset"
 os.makedirs(output_dir, exist_ok=True)
 
 json_files = sorted(os.listdir(input_json_dir))
 valid_count = 0
-start_index = 80000  # 在这里指定起始编号，想从080000开始就设为80000
+start_index = 0  # 在这里指定起始编号，想从080000开始就设为80000
 
 for i, json_file in enumerate(json_files):
     with open(os.path.join(input_json_dir, json_file), "r") as f:

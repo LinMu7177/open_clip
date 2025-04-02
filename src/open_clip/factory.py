@@ -482,6 +482,7 @@ def create_model_and_transforms(
         cache_dir: Optional[str] = None,
         output_dict: Optional[bool] = None,
         load_weights_only: bool = True,
+        num_answers:Optional[int] = None,
         **model_kwargs,
 ):
     force_preprocess_cfg = merge_preprocess_kwargs(
@@ -508,6 +509,7 @@ def create_model_and_transforms(
         cache_dir=cache_dir,
         output_dict=output_dict,
         load_weights_only=load_weights_only,
+        num_answers=num_answers,
         **model_kwargs,
     )
 

@@ -48,7 +48,6 @@ def postprocess_clip_output(model_out):
         "logit_scale": model_out[2]
     }
 
-
 def unwrap_model(model):
     if hasattr(model, 'module'):
         return model.module
@@ -75,7 +74,7 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, objects_sense_format, tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, objects_sense_format, tb_writer=None, answer2idx=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision, device_type=device.type)
     input_dtype = get_input_dtype(args.precision)
@@ -104,17 +103,30 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         if not args.skip_scheduler:
             scheduler(step)
 
-        if args.objects_sense_format and args.neg_type:
-            images, texts, objects_sense, neg_texts = batch
+        if args.objects_sense_format:
+            if args.neg_type and args.qa:
+                images, texts, objects_sense, qa, neg_texts = batch
+            elif args.neg_type:
+                images, texts, objects_sense, neg_texts = batch
+            elif args.qa:
+                images, texts, objects_sense, qa = batch
+            else:
+                images, texts, objects_sense = batch
+
             objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-            neg_texts = neg_texts.to(device=device, non_blocking=True)
-        elif args.objects_sense_format:
-            images, texts, objects_sense = batch
-            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+
+            if args.neg_type:
+                neg_texts = neg_texts.to(device=device, non_blocking=True)
+
+            if args.qa:
+                questions = torch.stack([item['question'] for item in qa], dim=0).to(device=device, non_blocking=True)
+                answers_raw = [item["answer"] for item in qa]
+            else:
+                questions = None
+                answers_raw = None
         else:
             images, texts = batch
             objects_sense = None
-
 
         images = images.to(device=device, dtype=input_dtype, non_blocking=True)
         texts = texts.to(device=device, non_blocking=True)
@@ -128,7 +140,10 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
         if args.accum_freq == 1:
             with autocast():
-                model_out = model(images, texts, objects_sense)
+                if args.qa:
+                    model_out = model(images, texts, objects_sense, questions)
+                else:
+                    model_out = model(images, texts, objects_sense)
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
@@ -140,6 +155,31 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
                 losses["loss"] = total_loss
                 losses["loss_neg"] = loss_neg
+
+
+                if args.qa:
+                    # 1) 拿到模型输出的 QA logits
+                    #    形状 [B, num_answers]
+                    qa_logits = model_out["qa_output"]
+
+                    # 2) 将字符串答案转为 label 索引
+                    #    假设 answer2idx 已在其他地方构建好
+                    answer_labels = []
+                    for ans_str in answers_raw:
+                        # 如果不存在可以用一个默认idx，或者 raise KeyError
+                        label_idx = answer2idx.get(ans_str, 0)
+                        answer_labels.append(label_idx)
+
+                    # 转成 tensor
+                    answer_labels = torch.tensor(answer_labels, dtype=torch.long, device=device)
+
+                    # 3) 计算交叉熵
+                    qa_loss = F.cross_entropy(qa_logits, answer_labels)
+
+                    # 4) 和对比损失合并
+                    total_loss = total_loss + qa_loss
+                    losses["loss_qa"] = qa_loss
+
 
             backward(total_loss, scaler)
         else:

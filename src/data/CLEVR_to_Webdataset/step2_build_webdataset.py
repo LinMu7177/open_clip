@@ -3,9 +3,9 @@ import json
 import webdataset as wds
 from glob import glob
 
-input_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/cc3m_style_dataset_80000_199999"
-json_source_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/output_scene_dir"
-output_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/webdataset_output_80000_199999"
+input_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/cc3m_style_dataset"
+json_source_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/output_scene_qa"
+output_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/webdataset_output"
 os.makedirs(output_dir, exist_ok=True)
 
 image_files = sorted(glob(os.path.join(input_dir, "*.jpg")))
