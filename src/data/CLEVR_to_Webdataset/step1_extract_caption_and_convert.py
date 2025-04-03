@@ -2,19 +2,20 @@ import os
 import json
 from PIL import Image
 
-input_image_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/images_0_39999"
-input_json_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/output_scene_dir"
-output_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/cc3m_style_dataset"
+input_image_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/images"
+input_json_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/output_scene_qa"
+output_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/cc3m_style_dataset"
 os.makedirs(output_dir, exist_ok=True)
 
 json_files = sorted(os.listdir(input_json_dir))
 valid_count = 0
+start_index = 0  # 在这里指定起始编号，想从080000开始就设为80000
 
 for i, json_file in enumerate(json_files):
     with open(os.path.join(input_json_dir, json_file), "r") as f:
         data = json.load(f)
 
-    # Check if image_caption exists
+    # 检查 image_caption 是否存在
     if "image_caption" not in data:
         print(f"[!] Skipping {json_file} (no image_caption)")
         continue
@@ -27,7 +28,7 @@ for i, json_file in enumerate(json_files):
         print(f"[!] Missing image: {img_filename}")
         continue
 
-    sample_id = f"{valid_count:06d}"
+    sample_id = f"{start_index + valid_count:06d}"
     output_img_path = os.path.join(output_dir, f"{sample_id}.jpg")
     output_txt_path = os.path.join(output_dir, f"{sample_id}.txt")
 

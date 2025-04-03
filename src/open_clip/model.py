@@ -233,9 +233,11 @@ class CLIP(nn.Module):
             nonscalar_logit_scale: bool = False,
             cast_dtype: Optional[torch.dtype] = None,
             output_dict: bool = False,
+            num_answers: Optional[int] = None,
     ):
         super().__init__()
         self.output_dict = output_dict
+        self.num_answers = num_answers
 
         self.visual = _build_vision_tower(embed_dim, vision_cfg, quick_gelu, cast_dtype)
 
@@ -256,6 +258,20 @@ class CLIP(nn.Module):
             self.logit_bias = nn.Parameter(torch.ones(lshape) * init_logit_bias)
         else:
             self.logit_bias = None
+
+        # 1) 用于处理 image_features 的 MLP，输入/输出都是 embed_dim
+        self.mlp_image = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(embed_dim, embed_dim),
+        )
+
+        # 2) 用于处理拼接后的 [image_features, q_features] 的 MLP拼接后维度是 2 * embed_dim，输出希望与 answer 一样，这里假设也是 embed_dim
+        self.mlp_qa = nn.Sequential(
+            nn.Linear(2 * embed_dim, 2 * embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(2 * embed_dim, self.num_answers),
+        )
 
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         # lock image tower as per LiT - https://arxiv.org/abs/2111.07991
@@ -341,7 +357,7 @@ class CLIP(nn.Module):
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
             objects_sense: Optional[torch.Tensor] = None,
-            neg_text: Optional[torch.Tensor] = None,
+            question: Optional[torch.Tensor] = None,
     ):
         if objects_sense is not None:
             image_features = self.encode_image(image, objects_sense, normalize=True) if image is not None else None
@@ -349,6 +365,13 @@ class CLIP(nn.Module):
             image_features = self.encode_image(image, normalize=True) if image is not None else None
 
         text_features = self.encode_text(text, normalize=True) if text is not None else None
+
+        qa_output = None
+        if question is not None:
+            question_features = self.encode_text(question, normalize=True)
+            image_features_mlp = self.mlp_image(image_features)
+            concat_q = torch.cat([image_features_mlp, question_features], dim=-1)
+            qa_output = self.mlp_qa(concat_q)
 
         if self.output_dict:
             out_dict = {
@@ -358,11 +381,11 @@ class CLIP(nn.Module):
             }
             if self.logit_bias is not None:
                 out_dict['logit_bias'] = self.logit_bias
+            if qa_output is not None:
+                out_dict["qa_output"] = qa_output
             return out_dict
 
-        if self.logit_bias is not None:
-            return image_features, text_features, self.logit_scale.exp(), self.logit_bias
-        return image_features, text_features, self.logit_scale.exp()
+        return image_features, text_features, self.logit_scale.exp(), qa_output
 
 
 class CustomTextCLIP(nn.Module):

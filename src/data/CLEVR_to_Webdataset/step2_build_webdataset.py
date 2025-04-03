@@ -3,9 +3,9 @@ import json
 import webdataset as wds
 from glob import glob
 
-input_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/cc3m_style_dataset"
-json_source_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/output_scene_dir"
-output_dir = "/mnt/user_data/wenwen/data/CLEVR_Sample_Data/webdataset_output"
+input_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/cc3m_style_dataset"
+json_source_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/output_scene_qa"
+output_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/webdataset_output"
 os.makedirs(output_dir, exist_ok=True)
 
 image_files = sorted(glob(os.path.join(input_dir, "*.jpg")))
@@ -19,7 +19,7 @@ sink = wds.ShardWriter(shard_pattern, maxcount=shard_size)
 for i, img_path in enumerate(image_files):
     base = os.path.splitext(os.path.basename(img_path))[0]
     txt_path = os.path.join(input_dir, base + ".txt")
-    json_file = f"{int(base):06d}.json"
+    json_file = f"CLEVR_sample_{int(base):06d}.json"
     json_path = os.path.join(json_source_dir, json_file)
 
     if not (os.path.exists(txt_path) and os.path.exists(json_path)):
