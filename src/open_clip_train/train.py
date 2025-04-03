@@ -107,7 +107,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
         load_data_time_m.update(time.time() - end)
 
-        if args.objects_sense_format and args.neg_type:
+        if args.objects_sense_format and args.vl_negs:
             images, texts, objects_sense, neg_texts = batch
             objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
             neg_texts = neg_texts.to(device=device, non_blocking=True)

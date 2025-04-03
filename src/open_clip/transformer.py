@@ -468,8 +468,11 @@ class VisionTransformer(nn.Module):
 
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=width, kernel_size=patch_size, stride=patch_size, bias=False)
         self.conv1_alpha = nn.Conv2d(in_channels=1, out_channels=width, kernel_size=patch_size, stride=patch_size, padding=0, bias=False)
-        init.zeros_(self.conv1_alpha.weight)
-
+        self.attention = nn.Sequential(
+            nn.Conv2d(width * 2, width, kernel_size=1),
+            nn.Sigmoid()
+        )
+        
         # class embeddings and positional embeddings
         scale = width ** -0.5
         self.class_embedding = nn.Parameter(scale * torch.randn(width))
@@ -616,7 +619,11 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x: torch.Tensor, alpha=None):
         if alpha is not None:
-            x = self.conv1(x) + self.conv1_alpha(alpha)
+            x_feat = self.conv1(x)
+            alpha_feat = self.conv1_alpha(alpha)
+            combined = torch.cat([x_feat, alpha_feat], dim=1)
+            attention_weights = self.attention(combined)
+            x = x_feat * attention_weights + alpha_feat * (1 - attention_weights)
         else:
             x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
