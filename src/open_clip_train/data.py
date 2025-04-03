@@ -734,9 +734,14 @@ def get_multi_wds_dataset(
 
 
     # TODO 选择不同的数据集混合方式
-    # merged_pipeline = wds.RandomMix(pipelines, ratios, longest=True)
-    merged_pipeline = wds.RoundRobin(pipelines, longest=True)
-    # merged_pipeline = wds.ConcatMix(pipelines)
+    if args.mix_type == 'mix':
+        merged_pipeline = wds.RandomMix(pipelines, ratios, longest=True)
+    elif args.mix_type == 'round':
+        merged_pipeline = wds.RoundRobin(pipelines, longest=True)
+    elif args.mix_type == 'merge':
+        merged_pipeline = wds.ConcatMix(pipelines)
+    else:
+        raise ValueError(f"Invalid mix_type: {args.mix_type}")
 
 
     if is_train:

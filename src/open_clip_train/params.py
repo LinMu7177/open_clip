@@ -520,6 +520,12 @@ def parse_args(args):
 
     parser.add_argument("--dataset_info", type=str, default=None, help="Path to dataset info file.")
 
+    parser.add_argument(
+        "--mix_type",
+        type=str,
+        default=None,
+        help="Type of webdataset mix",
+    )
 
     args = parser.parse_args(args)
 
