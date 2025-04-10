@@ -493,7 +493,7 @@ def main(args):
         if is_master(args):
             logging.info(f'Start epoch {epoch}')
 
-        train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, args.objects_sense_format, tb_writer=writer, answer2idx=answer2idx)
+        train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, args.objects_sense_format, tb_writer=writer, answer2idx=answer2idx if args.qa else None)
         completed_epoch = epoch + 1
 
         if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):

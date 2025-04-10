@@ -33,6 +33,7 @@ import torchvision.transforms.functional as F
 # from torchvision.transforms.transforms import JointRandomResizedCrop
 
 from open_clip_train.svlc_learning.negs_and_pos import Negatives, NegativesLLM, ChunkSample, BothNegatives
+from open_clip_train.data_utils import process_qa
 
 from torch import Tensor
 from collections.abc import Sequence
@@ -655,6 +656,7 @@ def get_multi_wds_dataset(
                     wds.select(filter_no_caption_or_no_image),
                     wds.decode("pilrgb", handler=log_and_continue),
                     wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
+                    (wds.map(lambda sample: {**sample, 'qa': process_qa(sample.get('json', {}).get('QA', {}), tokenizer)}) if args.qa else None),
                     wds.map(lambda sample, objects_data=objects_data: {
                         **sample,
                         'objects_sense': get_objects_sense(
@@ -667,6 +669,8 @@ def get_multi_wds_dataset(
                     wds.map(join_preprocess)
                 ])
 
+                _pipe = [_p for _p in _pipe if _p is not None]  # Remove None values
+
                 if args.vl_negs:
                     _pipe.extend([
                         wds.map(lambda sample: {
@@ -678,7 +682,7 @@ def get_multi_wds_dataset(
                             text=lambda text: tokenizer(text)[0],
                             negatives=lambda negatives: tokenizer(negatives)
                         ),
-                        wds.to_tuple("image", "text", "objects_sense", "negatives"),
+                        wds.to_tuple("image", "text", "objects_sense", "qa", "negatives") if args.qa else wds.to_tuple("image", "text", "objects_sense", "negatives"),
                         wds.batched(args.batch_size, partial=not is_train)
                     ])
                 else:
@@ -687,7 +691,7 @@ def get_multi_wds_dataset(
                             image=preprocess_img_train,
                             text=lambda text: tokenizer(text)[0]
                         ),
-                        wds.to_tuple("image", "text", "objects_sense"),
+                        wds.to_tuple("image", "text", "objects_sense", "qa") if args.qa else wds.to_tuple("image", "text", "objects_sense"),
                         wds.batched(args.batch_size, partial=not is_train)
                     ])
             else:
