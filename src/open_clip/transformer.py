@@ -353,7 +353,7 @@ class Transformer(nn.Module):
             return self.resblocks[0].mlp.c_fc.int8_original_dtype
         return self.resblocks[0].mlp.c_fc.weight.dtype
 
-    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None, alpha: Optional[torch.Tensor] = None): 
         if not self.batch_first:
             x = x.transpose(0, 1).contiguous()    # NLD -> LND
         for r in self.resblocks:
@@ -361,7 +361,7 @@ class Transformer(nn.Module):
                 # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
                 x = checkpoint(r, x, None, None, attn_mask)
             else:
-                x = r(x, attn_mask=attn_mask)
+                x = r(x, attn_mask=attn_mask) if alpha is None else r(x + alpha, attn_mask=attn_mask)
         if not self.batch_first:
             x = x.transpose(0, 1)    # LND -> NLD
         return x
@@ -468,10 +468,13 @@ class VisionTransformer(nn.Module):
 
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=width, kernel_size=patch_size, stride=patch_size, bias=False)
         self.conv1_alpha = nn.Conv2d(in_channels=1, out_channels=width, kernel_size=patch_size, stride=patch_size, padding=0, bias=False)
+        # init.zeros_(self.conv1_alpha.weight)
         self.attention = nn.Sequential(
             nn.Conv2d(width * 2, width, kernel_size=1),
             nn.Sigmoid()
         )
+        self.alpha_patch_dropout = PatchDropout(patch_dropout) if patch_dropout > 0. else nn.Identity()
+        self.alpha_ln_pre = nn.Identity() if no_ln_pre else norm_layer(width)
         
         # class embeddings and positional embeddings
         scale = width ** -0.5
@@ -623,7 +626,8 @@ class VisionTransformer(nn.Module):
             alpha_feat = self.conv1_alpha(alpha)
             combined = torch.cat([x_feat, alpha_feat], dim=1)
             attention_weights = self.attention(combined)
-            x = x_feat * attention_weights + alpha_feat * (1 - attention_weights)
+            # x = x_feat * attention_weights + alpha_feat * (1 - attention_weights)
+            x = x_feat + alpha_feat
         else:
             x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
@@ -636,7 +640,18 @@ class VisionTransformer(nn.Module):
 
         x = self.patch_dropout(x)
         x = self.ln_pre(x)
-        x = self.transformer(x)
+
+        ## TODO alpha process
+        if alpha is not None:
+            alpha_feat = self.conv1_alpha(alpha)
+            alpha = alpha_feat.reshape(alpha_feat.shape[0], alpha_feat.shape[1], -1)
+            alpha = alpha.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+            alpha = torch.cat([_expand_token(self.class_embedding, alpha.shape[0]).to(alpha.dtype), alpha], dim=1)
+            alpha = alpha + self.positional_embedding.to(alpha.dtype)
+            alpha = self.alpha_patch_dropout(alpha)
+            alpha = self.alpha_ln_pre(alpha)
+
+        x = self.transformer(x) if alpha is None else self.transformer(x, alpha=alpha)
 
         if self.attn_pool is not None:
             if self.attn_pool_contrastive is not None:
