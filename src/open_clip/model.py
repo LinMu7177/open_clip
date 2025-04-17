@@ -310,7 +310,12 @@ class CLIP(nn.Module):
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
             objects_sense: Optional[torch.Tensor] = None,
-            neg_text: Optional[torch.Tensor] = None,
+            property_pos: Optional[torch.Tensor] = None,
+            property_neg: Optional[torch.Tensor] = None,
+            counting_pos: Optional[torch.Tensor] = None,
+            counting_neg: Optional[torch.Tensor] = None,
+            spatial_pos: Optional[torch.Tensor] = None,
+            spatial_neg: Optional[torch.Tensor] = None
     ):
         if objects_sense is not None:
             image_features = self.encode_image(image, objects_sense, normalize=True) if image is not None else None
@@ -319,10 +324,23 @@ class CLIP(nn.Module):
 
         text_features = self.encode_text(text, normalize=True) if text is not None else None
 
+        property_pos_features = self.encode_text(property_pos, normalize=True) if property_pos is not None else None
+        property_neg_features = self.encode_text(property_neg, normalize=True) if property_neg is not None else None
+        counting_pos_features = self.encode_text(counting_pos, normalize=True) if counting_pos is not None else None
+        counting_neg_features = self.encode_text(counting_neg, normalize=True) if counting_neg is not None else None
+        spatial_pos_features = self.encode_text(spatial_pos, normalize=True) if spatial_pos is not None else None
+        spatial_neg_features = self.encode_text(spatial_neg, normalize=True) if spatial_neg is not None else None
+
         if self.output_dict:
             out_dict = {
                 "image_features": image_features,
                 "text_features": text_features,
+                "property_pos_features": property_pos_features,
+                "property_neg_features": property_neg_features,
+                "counting_pos_features": counting_pos_features,
+                "counting_neg_features": counting_neg_features,
+                "spatial_pos_features": spatial_pos_features,
+                "spatial_neg_features": spatial_neg_features,
                 "logit_scale": self.logit_scale.exp()
             }
             if self.logit_bias is not None:

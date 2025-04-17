@@ -87,21 +87,32 @@ class ClipLoss(nn.Module):
         self.labels = {}
         self.args = args
 
-    def forward(self, image_features, text_features, logit_scale, pos_that_have_negs):
+    def forward(self, image_features, text_features, logit_scale, property_pos_features, property_neg_features, counting_pos_features, counting_neg_features, spatial_pos_features, spatial_neg_features):
         device = image_features.device
-        positive_text_features = None
-        loss_neg = 0.
 
-        if self.args.vl_negs and pos_that_have_negs:
-            loss_neg = self.get_loss_neg_only(image_features, text_features, logit_scale, pos_that_have_negs)
-            if self.args.no_neg_in_contrastive:
-                text_features = text_features[:len(image_features)]
+        property_loss = 0.
+        counting_loss = 0.
+        spatial_loss = 0.
+
+        if self.args.vl_negs:
+            if property_pos_features is not None:
+                property_loss = self.get_group_loss(
+                    image_features, property_pos_features, property_neg_features, logit_scale)
+
+            if counting_pos_features is not None:
+                counting_loss = self.get_group_loss(
+                    image_features, counting_pos_features, counting_neg_features, logit_scale)
+
+            if spatial_pos_features is not None:
+                spatial_loss = self.get_group_loss(
+                    image_features, spatial_pos_features, spatial_neg_features, logit_scale)
 
         if self.world_size > 1:
             all_image_features, all_text_features = gather_features(
                 image_features, text_features,
-                self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.args, positive_text_features)
-
+                self.local_loss, self.gather_with_grad,
+                self.rank, self.world_size, self.args, None
+            )
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @ all_text_features.T
                 logits_per_text = logit_scale * text_features @ all_image_features.T
@@ -112,10 +123,6 @@ class ClipLoss(nn.Module):
             logits_per_image = logit_scale * image_features @ text_features.T
             logits_per_text = logit_scale * text_features @ image_features.T
 
-        if self.args.vl_negs and pos_that_have_negs:
-            logits_per_text = logits_per_text[:len(logits_per_image)]
-
-        # calculated ground-truth and cache if enabled
         num_logits = logits_per_image.shape[0]
         if self.prev_num_logits != num_logits or device not in self.labels:
             labels = torch.arange(num_logits, device=device, dtype=torch.long)
@@ -127,15 +134,42 @@ class ClipLoss(nn.Module):
         else:
             labels = self.labels[device]
 
-        total_loss = (
-            F.cross_entropy(logits_per_image, labels) +
-            F.cross_entropy(logits_per_text, labels)
-            ) / 2
+        contrastive_loss = (
+                                   F.cross_entropy(logits_per_image, labels) +
+                                   F.cross_entropy(logits_per_text, labels)
+                           ) / 2
 
-        if self.args.vl_negs and pos_that_have_negs:
-            total_loss += self.args.neg_w*loss_neg
-            return total_loss, loss_neg
-        return total_loss, total_loss*0
+        total_loss = contrastive_loss
+        if self.args.vl_negs:
+            neg_sum = property_loss + counting_loss + spatial_loss
+            total_loss = total_loss + self.args.neg_w * neg_sum
+
+        return total_loss, property_loss, counting_loss, spatial_loss
+
+    def get_group_loss(self, image_feats, pos_feats, neg_feats, logit_scale):
+        """
+        image_feats : (B, D)
+        pos_feats   : (B, D)
+        neg_feats   : (B, K, D)  或  (B, D)  或  None
+        """
+        B, D = image_feats.shape
+        device = image_feats.device
+
+        pos_feats = pos_feats.unsqueeze(1)
+
+        if neg_feats is None:
+            feat_cat = pos_feats  # (B, 1, D)
+        else:
+            if neg_feats.dim() == 2:
+                neg_feats = neg_feats.unsqueeze(1)  # (B, 1, D)
+            feat_cat = torch.cat([pos_feats, neg_feats], dim=1)  # (B, 1+K, D)
+
+        logits = logit_scale * torch.matmul(
+            feat_cat, image_feats.unsqueeze(2)  # (B, 1+K, 1)
+        ).squeeze(-1)
+
+        target = torch.zeros(B, dtype=torch.long, device=device)  # 正样本在 0 位
+        return F.cross_entropy(logits, target)
 
     def get_loss_neg_only(self, image_features, text_features, logit_scale,pos_that_have_negs):
         num_imgs = image_features.shape[0]

@@ -132,25 +132,11 @@ class JointRandomResizedCrop(torch.nn.Module):
         return i, j, h, w
 
     def forward(self, sample: dict) -> dict:
-        """
-        Args:
-            sample (dict): 包含 "image" 和 "mask" 的字典:
-                sample["image"]: PIL.Image 或 Tensor
-                sample["objects_sense"]:  PIL.Image 或 Tensor
-            其他键值可以自行存放在这个字典里，本函数只会操作 "image" 和 "mask"。
-
-        Returns:
-            dict: 返回同一个字典，其中 "image" 和 "mask" 都经过随机裁剪 & resize。
-        """
-        # 取出图像与mask
         img = sample["image"]
         msk = sample["objects_sense"]
 
-        # 1) 先得到随机裁剪参数
         i, j, h, w = self.get_params(img, self.scale, self.ratio)
 
-        # 2) 对图像进行随机裁剪+resize
-        #   - 双线性/双三次插值可以使用 antialias=True
         img = F.resized_crop(
             img, i, j, h, w,
             self.size,
@@ -158,9 +144,6 @@ class JointRandomResizedCrop(torch.nn.Module):
             antialias=self.antialias
         )
 
-        # 3) 对mask进行相同的随机裁剪+resize
-        #   - 对mask通常用最近邻插值 (mask_interpolation) 并禁用 antialias
-        #   - 避免将分类标签插值为非整数
         msk = F.resized_crop(
             msk, i, j, h, w,
             self.size,
@@ -505,22 +488,21 @@ class ResampledShards2(IterableDataset):
             else:
                 yield dict(url=self.rng.choices(self.urls, weights=self.weights, k=1)[0])
 
-def load_edges(edges_demo_path, image_shape):
-    if os.path.exists(edges_demo_path):
-        with open(edges_demo_path, 'rb') as f:
-            combined_edges = pickle.load(f)
-        rle = {'size': combined_edges['size'], 'counts': combined_edges['counts']}
+def get_objects_sense(sample, objects_sense_format):
+    if objects_sense_format != 'edges':
+        raise ValueError(f"unsupported objects_sense_format={objects_sense_format}")
+
+    info_dict = sample['info']
+    if 'edges' in info_dict:
+        rle = info_dict['edges']
+        if isinstance(rle['counts'], str):
+            rle['counts'] = rle['counts'].encode('ascii')
         mask = mask_util.decode(rle)
-        return mask
     else:
-        return np.ones(image_shape[:2], dtype=np.uint8)
+        h, w = sample['image'].size[::-1]
+        mask = np.ones((h, w), dtype=np.uint8)
 
-def get_objects_sense(key, image, objects_sense_format, objects_data):
-    if objects_sense_format == 'edges':
-        objects_sense_path = os.path.join(objects_data, key + '_edges.pkl')
-        edges = load_edges(objects_sense_path,image.size)
-
-    edges = torch.as_tensor(edges).unsqueeze(0).half() * 255
+    edges = torch.as_tensor(mask).unsqueeze(0).half() * 255          # (1,H,W), 0/255
     edges = objects_sense_normalize(edges)
     return edges
 
@@ -587,46 +569,47 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
         ])
 
     if args.objects_sense_format:
-        if is_train:
-            preprocess_img.transforms = preprocess_img.transforms[1:]
+        def add_objects_sense(sample):
+            sample['objects_sense'] = get_objects_sense(sample, args.objects_sense_format)
+            return sample
 
+        preprocess_img.transforms = preprocess_img.transforms[1:]
+        pipeline.extend([
+            wds.select(filter_no_caption_or_no_image),
+            wds.decode("pilrgb", handler=log_and_continue),
+            wds.rename(key="__key__",image="jpg;png;jpeg;webp", text="txt", info="json"),
+            wds.map(add_objects_sense),
+            wds.map(join_preprocess)
+        ])
+
+        if args.vl_negs:
             pipeline.extend([
-                wds.select(filter_no_caption_or_no_image),
-                wds.decode("pilrgb", handler=log_and_continue),
-                wds.rename(key="__key__",image="jpg;png;jpeg;webp", text="txt"),
-                wds.map(lambda sample: {**sample, 'objects_sense':
-                    get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
-                # Apply the same random cropping to the image and objects sense
-                wds.map(join_preprocess)
+                wds.map(lambda sample: {**sample,
+                                        'property_pos':sample['info']['PN']['property'][0]['Positive'],
+                                        'property_neg':sample['info']['PN']['property'][0]['Negative'],
+                                        'counting_pos': sample['info']['PN']['counting'][0]['Positive'],
+                                        'counting_neg': sample['info']['PN']['counting'][0]['Negative'],
+                                        'spatial_pos': sample['info']['PN']['spatial'][0]['Positive'],
+                                        'spatial_neg': sample['info']['PN']['spatial'][0]['Negative']
+                                        }),
+                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0],
+                             property_pos=lambda property_pos: tokenizer(property_pos)[0],
+                             property_neg=lambda property_neg: tokenizer(property_neg)[0],
+                             counting_pos=lambda counting_pos: tokenizer(counting_pos)[0],
+                             counting_neg=lambda counting_neg: tokenizer(counting_neg)[0],
+                             spatial_pos=lambda spatial_pos: tokenizer(spatial_pos)[0],
+                             spatial_neg=lambda spatial_neg: tokenizer(spatial_neg)[0]
+                             ),
+                wds.to_tuple("image", "text", "objects_sense", "property_pos", "property_neg", "counting_pos", "counting_neg", "spatial_pos", "spatial_neg"),
+                wds.batched(args.batch_size, partial=not is_train)
             ])
-
-            if args.vl_negs:
-                pipeline.extend([
-                    wds.map(lambda sample: {**sample, 'negatives':negs_creator.create_negs(sample['text'])}),
-                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0], negatives=lambda negatives: tokenizer(negatives)),
-                    wds.to_tuple("image", "text", "objects_sense", "negatives"),
-                    wds.batched(args.batch_size, partial=not is_train)
-                ])
-            else:
-                pipeline.extend([
-                    wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-                    wds.to_tuple("image", "text", "objects_sense"),
-                    wds.batched(args.batch_size, partial=not is_train)
-                ])
         else:
-            preprocess_objects_val = copy.deepcopy(preprocess_img)
-            preprocess_objects_val.transforms = preprocess_objects_val.transforms[:2]
             pipeline.extend([
-                wds.select(filter_no_caption_or_no_image),
-                wds.decode("pilrgb", handler=log_and_continue),
-                wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt"),
-                wds.map(lambda sample: {**sample, 'objects_sense':
-                    get_objects_sense(sample['key'], sample['image'], args.objects_sense_format, args.objects_data)}),
-                # Apply the same random cropping to the image and objects sense
-                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0], objects_sense=preprocess_objects_val),
+                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
                 wds.to_tuple("image", "text", "objects_sense"),
                 wds.batched(args.batch_size, partial=not is_train)
             ])
+
     else:
         pipeline.extend([
             wds.select(filter_no_caption_or_no_image),

@@ -75,7 +75,8 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, objects_sense_format, tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, objects_sense_format,
+                    tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision, device_type=device.type)
     input_dtype = get_input_dtype(args.precision)
@@ -100,14 +101,19 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         i_accum = i // args.accum_freq
         step = num_batches_per_epoch * epoch + i_accum
         neg_texts = None
-        
+
         if not args.skip_scheduler:
             scheduler(step)
 
         if args.objects_sense_format and args.neg_type:
-            images, texts, objects_sense, neg_texts = batch
+            images, texts, objects_sense, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
             objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-            neg_texts = neg_texts.to(device=device, non_blocking=True)
+            property_pos = property_pos.to(device=device, non_blocking=True)
+            property_neg = property_neg.to(device=device, non_blocking=True)
+            counting_pos = counting_pos.to(device=device, non_blocking=True)
+            counting_neg = counting_neg.to(device=device, non_blocking=True)
+            spatial_pos = spatial_pos.to(device=device, non_blocking=True)
+            spatial_neg = spatial_neg.to(device=device, non_blocking=True)
         elif args.objects_sense_format:
             images, texts, objects_sense = batch
             objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
@@ -115,20 +121,19 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
             images, texts = batch
             objects_sense = None
 
-
         images = images.to(device=device, dtype=input_dtype, non_blocking=True)
         texts = texts.to(device=device, non_blocking=True)
-        pos_that_have_negs = None
-
-        if neg_texts is not None:
-            texts, pos_that_have_negs = prepare_data_for_neg_loss(neg_texts, args, device, texts)
 
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
             with autocast():
-                model_out = model(images, texts, objects_sense)
+                if args.objects_sense_format and args.neg_type:
+                    model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
+                                      counting_neg, spatial_pos, spatial_neg)
+                else:
+                    model_out = model(images, texts, objects_sense)
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
@@ -136,10 +141,20 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
                 # losses = loss(**model_out, output_dict=True)
                 losses = {}
-                total_loss, loss_neg = loss(model_out["image_features"], model_out["text_features"], model_out["logit_scale"], pos_that_have_negs)
+                total_loss, property_loss, counting_loss, spatial_loss = loss(model_out["image_features"],
+                                                                              model_out["text_features"],
+                                                                              model_out["logit_scale"],
+                                                                              model_out["property_pos_features"],
+                                                                              model_out["property_neg_features"],
+                                                                              model_out["counting_pos_features"],
+                                                                              model_out["counting_neg_features"],
+                                                                              model_out["spatial_pos_features"],
+                                                                              model_out["spatial_neg_features"])
 
                 losses["loss"] = total_loss
-                losses["loss_neg"] = loss_neg
+                losses["property_loss"] = property_loss
+                losses["counting_loss"] = counting_loss
+                losses["spatial_loss"] = spatial_loss
 
             backward(total_loss, scaler)
         else:
@@ -189,7 +204,6 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     del inputs
                     del inputs_no_accum
                     losses["loss"] = total_loss
-                    losses["loss_neg"] = loss_neg
 
                 backward(total_loss, scaler)
 
@@ -238,7 +252,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
             logit_scale_scalar = logit_scale.item()
             loss_log = " ".join(
                 [
-                    f"{loss_name.capitalize()}: {loss_m.val:#.5g} ({loss_m.avg:#.5g})" 
+                    f"{loss_name.capitalize()}: {loss_m.val:#.5g} ({loss_m.avg:#.5g})"
                     for loss_name, loss_m in losses_m.items()
                 ]
             )
@@ -260,20 +274,20 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                 "samples_per_second_per_gpu": samples_per_second_per_gpu,
                 "scale": logit_scale_scalar,
                 "lr": optimizer.param_groups[0]["lr"]
-            }            
-            log_data.update({name:val.val for name,val in losses_m.items()})
+            }
+            log_data.update({name: val.val for name, val in losses_m.items()})
 
             log_data = {"train/" + name: val for name, val in log_data.items()}
 
             if tb_writer is not None:
                 for name, val in log_data.items():
                     tb_writer.add_scalar(name, val, step)
-            
+
             if args.wandb:
                 assert wandb is not None, 'Please install wandb.'
                 log_data['step'] = step  # for backwards compatibility
                 wandb.log(log_data, step=step)
-            
+
             # resetting batch / data time meters per log window
             batch_time_m.reset()
             data_time_m.reset()
@@ -305,7 +319,16 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
         all_image_features, all_text_features = [], []
         with torch.inference_mode():
             for i, batch in enumerate(dataloader):
-                if args.objects_sense_format:
+                if args.objects_sense_format and args.neg_type:
+                    images, texts, objects_sense, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
+                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+                    property_pos = property_pos.to(device=device, non_blocking=True)
+                    property_neg = property_neg.to(device=device, non_blocking=True)
+                    counting_pos = counting_pos.to(device=device, non_blocking=True)
+                    counting_neg = counting_neg.to(device=device, non_blocking=True)
+                    spatial_pos = spatial_pos.to(device=device, non_blocking=True)
+                    spatial_neg = spatial_neg.to(device=device, non_blocking=True)
+                elif args.objects_sense_format:
                     images, texts, objects_sense = batch
                     objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
                 else:
@@ -315,7 +338,12 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                 texts = texts.to(device=device, non_blocking=True)
 
                 with autocast():
-                    model_out = model(images, texts, objects_sense)
+
+                    if args.objects_sense_format and args.neg_type:
+                        model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
+                                          counting_neg, spatial_pos, spatial_neg)
+                    else:
+                        model_out = model(images, texts, objects_sense)
                     image_features = model_out["image_features"]
                     text_features = model_out["text_features"]
                     logit_scale = model_out["logit_scale"]
@@ -330,9 +358,9 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                     batch_size = images.shape[0]
                     labels = torch.arange(batch_size, device=device).long()
                     total_loss = (
-                        F.cross_entropy(logits_per_image, labels) +
-                        F.cross_entropy(logits_per_text, labels)
-                    ) / 2
+                                         F.cross_entropy(logits_per_image, labels) +
+                                         F.cross_entropy(logits_per_text, labels)
+                                 ) / 2
 
                     gen_loss = maybe_compute_generative_loss(model_out)
 

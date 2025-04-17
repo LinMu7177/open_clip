@@ -468,7 +468,7 @@ class VisionTransformer(nn.Module):
 
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=width, kernel_size=patch_size, stride=patch_size, bias=False)
         self.conv1_alpha = nn.Conv2d(in_channels=1, out_channels=width, kernel_size=patch_size, stride=patch_size, padding=0, bias=False)
-        init.zeros_(self.conv1_alpha.weight)
+        init.kaiming_normal_(self.conv1_alpha.weight)
 
         # class embeddings and positional embeddings
         scale = width ** -0.5
