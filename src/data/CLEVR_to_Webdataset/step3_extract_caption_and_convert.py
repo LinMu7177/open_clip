@@ -2,9 +2,9 @@ import os
 import json
 from PIL import Image
 
-input_image_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/images"
-input_json_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/output_scene_qa"
-output_dir = "/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/cc3m_style_dataset"
+input_image_dir = "/mnt/user_data/wenwen/data/clevr/clevr_40000/images"
+input_json_dir = "/mnt/user_data/wenwen/data/clevr/clevr_40000/output_scene_pn"
+output_dir = "/mnt/user_data/wenwen/data/clevr/clevr_40000/cc3m_style_dataset"
 os.makedirs(output_dir, exist_ok=True)
 
 json_files = sorted(os.listdir(input_json_dir))

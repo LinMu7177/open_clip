@@ -17,7 +17,7 @@ MAIN_ATTRIBUTES = ["shape", "size", "material", "color"]
 DIRECTION_KEYS = ["front", "behind", "left", "right"]
 
 # 可以先定义一组常量，用来识别每个属性值属于哪一类
-SHAPE_SET = {"sphere", "cube", "cylinder", "helix", "cone", "capsule"}  # 根据你们数据集可能还有别的形状
+SHAPE_SET = {"sphere", "cube", "cylinder"}  # 根据你们数据集可能还有别的形状
 SIZE_SET = {"small", "large"}
 MATERIAL_SET = {"rubber", "metal"}
 COLOR_SET = {"red", "blue", "yellow", "cyan", "gray", "brown", "green", "purple"}  # 视数据集而定

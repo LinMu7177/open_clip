@@ -5,11 +5,11 @@ from tqdm import tqdm  # 进度条库
 
 # ========== 你可以在这里修改 start_index 和 num_files_to_process ==========
 start_index =0
-num_files_to_process = 100000
+num_files_to_process = 40000
 # ========================================================================
 
 # 设置 JSON 文件所在目录
-input_dir = '/mnt/user_data/wenwen/data/clevr/clevr_basic_100000/output_scene_qa'
+input_dir = '/mnt/user_data/wenwen/data/clevr/clevr_40000/output_scene'
 
 
 # 函数：根据文件名解析出其数值索引
