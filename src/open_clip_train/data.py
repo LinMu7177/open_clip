@@ -574,13 +574,15 @@ def load_edges(edges_demo_path, image_shape):
             with open(edges_demo_path, 'rb') as f:
                 combined_edges = pickle.load(f)
             rle = {'size': combined_edges['size'], 'counts': combined_edges['counts']}
+            # logging.info(f'Loaded edges from {edges_demo_path}')
             mask = mask_util.decode(rle)
         except Exception as e:
             logging.error(f'Error loading edges from {edges_demo_path}: {e}')
-            mask = np.ones(image_shape[:2], dtype=np.uint8)
+            mask = np.zeros(image_shape[:2], dtype=np.uint8)
         return mask
     else:
-        return np.ones(image_shape[:2], dtype=np.uint8)
+        # logging.warning(f'Edges file {edges_demo_path} does not exist. Using default mask.')
+        return np.zeros(image_shape[:2], dtype=np.uint8)
 
 
 def get_objects_sense(key, image, objects_sense_format, objects_data):
@@ -660,7 +662,7 @@ def get_multi_wds_dataset(
                     wds.map(lambda sample, objects_data=objects_data: {
                         **sample,
                         'objects_sense': get_objects_sense(
-                            sample['key'],
+                            'CLEVR_sample_' + sample['key'],
                             sample['image'],
                             args.objects_sense_format,
                             objects_data

@@ -468,7 +468,6 @@ class VisionTransformer(nn.Module):
 
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=width, kernel_size=patch_size, stride=patch_size, bias=False)
         self.conv1_alpha = nn.Conv2d(in_channels=1, out_channels=width, kernel_size=patch_size, stride=patch_size, padding=0, bias=False)
-        # init.zeros_(self.conv1_alpha.weight)
         self.attention = nn.Sequential(
             nn.Conv2d(width * 2, width, kernel_size=1),
             nn.Sigmoid()
@@ -642,6 +641,7 @@ class VisionTransformer(nn.Module):
         x = self.ln_pre(x)
 
         ## TODO alpha process
+        # alpha = None
         if alpha is not None:
             alpha_feat = self.conv1_alpha(alpha)
             alpha = alpha_feat.reshape(alpha_feat.shape[0], alpha_feat.shape[1], -1)
@@ -650,7 +650,7 @@ class VisionTransformer(nn.Module):
             alpha = alpha + self.positional_embedding.to(alpha.dtype)
             alpha = self.alpha_patch_dropout(alpha)
             alpha = self.alpha_ln_pre(alpha)
-
+        
         x = self.transformer(x) if alpha is None else self.transformer(x, alpha=alpha)
 
         if self.attn_pool is not None:
