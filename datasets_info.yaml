@@ -1,17 +1,17 @@
-Spatial_Sence:
-  train_data: /mnt/shared/data/SpatialSense_webdataset/{00000..00001}.tar
-  val_data: /mnt/shared/data/SpatialSense_webdataset/{00000..00001}.tar
-  objects_data: /mnt/shared/data/DINO_SAM2_Data/SpatialSense_new/
-  train_num_samples: 8749
-  val_num_samples: 8749
-  ratio: 0.1
-CLEVR:
-  train_data: /mnt/shared/data/CLEVR_neg/{00000..00004}.tar
-  val_data: /mnt/shared/data/CLEVR_neg/00004.tar
-  objects_data: /mnt/shared/data/DINO_SAM2_Data/CLEVR_Sample_Data/
-  train_num_samples: 32000
-  val_num_samples: 8000
-  ratio: 0.2
+# Spatial_Sence:
+#   train_data: /mnt/shared/data/SpatialSense_webdataset/{00000..00001}.tar
+#   val_data: /mnt/shared/data/SpatialSense_webdataset/{00000..00001}.tar
+#   objects_data: /mnt/shared/data/DINO_SAM2_Data/SpatialSense_new/
+#   train_num_samples: 8749
+#   val_num_samples: 8749
+#   ratio: 0.1
+# CLEVR:
+#   train_data: /mnt/shared/data/CLEVR_neg/{00000..00004}.tar
+#   val_data: /mnt/shared/data/CLEVR_neg/00004.tar
+#   objects_data: /mnt/shared/data/DINO_SAM2_Data/CLEVR_Sample_Data/
+#   train_num_samples: 32000
+#   val_num_samples: 8000
+#   ratio: 0.3
 # CLEVR12W:
 #   train_data: /mnt/user_data/wenwen/data/CLEVR_Sample_Data/webdataset_output_80000_199999/{00000..00014}.tar
 #   val_data: /mnt/user_data/wenwen/data/CLEVR_Sample_Data/webdataset_output_80000_199999/00014.tar
@@ -33,3 +33,12 @@ CLEVR:
 #   train_num_samples: 8480000
 #   val_num_samples: 13607
 #   ratio: 0.7
+
+
+CLEVR_QA:
+  train_data: /mnt/user_data/wenwen/data/clevr/clevr_basic_100000/webdataset_output/{00000..00009}.tar
+  val_data: /mnt/user_data/wenwen/data/clevr/clevr_basic_100000/webdataset_output/{00010..00011}.tar
+  objects_data: /mnt/shared/data/DINO_SAM2_Data/clevr/clevr_basic_100000_RP
+  train_num_samples: 80000
+  val_num_samples: 16000
+  ratio: 0.2
