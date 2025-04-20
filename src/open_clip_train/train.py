@@ -141,17 +141,21 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
                 # losses = loss(**model_out, output_dict=True)
                 losses = {}
-                total_loss, property_loss, counting_loss, spatial_loss = loss(model_out["image_features"],
-                                                                              model_out["text_features"],
-                                                                              model_out["logit_scale"],
-                                                                              model_out["property_pos_features"],
-                                                                              model_out["property_neg_features"],
-                                                                              model_out["counting_pos_features"],
-                                                                              model_out["counting_neg_features"],
-                                                                              model_out["spatial_pos_features"],
-                                                                              model_out["spatial_neg_features"])
+                total_loss, contrastive_loss, neg_loss, property_loss, counting_loss, spatial_loss = loss(
+                    model_out["image_features"],
+                    model_out["text_features"],
+                    model_out["logit_scale"],
+                    model_out["property_pos_features"],
+                    model_out["property_neg_features"],
+                    model_out["counting_pos_features"],
+                    model_out["counting_neg_features"],
+                    model_out["spatial_pos_features"],
+                    model_out["spatial_neg_features"],
+                )
 
                 losses["loss"] = total_loss
+                losses["contrastive_loss"] = contrastive_loss
+                losses["neg_loss"] = neg_loss
                 losses["property_loss"] = property_loss
                 losses["counting_loss"] = counting_loss
                 losses["spatial_loss"] = spatial_loss
@@ -314,8 +318,13 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
 
         # FIXME this does not scale past small eval datasets
         # all_image_features @ all_text_features will blow up memory and compute very quickly
-        cumulative_loss = 0.0
+        cumulative_total_loss = 0.0
+        cumulative_contrastive_loss = 0.0
         cumulative_gen_loss = 0.0
+        cumulative_neg_loss = 0.0
+        cumulative_property_loss = 0.0
+        cumulative_counting_loss = 0.0
+        cumulative_spatial_loss = 0.0
         all_image_features, all_text_features = [], []
         with torch.inference_mode():
             for i, batch in enumerate(dataloader):
@@ -357,34 +366,60 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
 
                     batch_size = images.shape[0]
                     labels = torch.arange(batch_size, device=device).long()
-                    total_loss = (
+                    contrastive_loss = (
                                          F.cross_entropy(logits_per_image, labels) +
                                          F.cross_entropy(logits_per_text, labels)
                                  ) / 2
-
+                    
                     gen_loss = maybe_compute_generative_loss(model_out)
 
-                cumulative_loss += total_loss * batch_size
-                num_samples += batch_size
+                    neg_loss, property_loss, counting_loss, spatial_loss = maybe_compute_neg_loss(args, model_out)
+
+                cumulative_contrastive_loss += contrastive_loss * batch_size
+                cumulative_total_loss += contrastive_loss * batch_size
+                if neg_loss is not None:
+                    cumulative_neg_loss += neg_loss * batch_size
+                    cumulative_property_loss += property_loss * batch_size
+                    cumulative_counting_loss += counting_loss * batch_size
+                    cumulative_spatial_loss += spatial_loss * batch_size
+                    # add neg loss to total loss
+                    cumulative_total_loss += neg_loss * batch_size
+        
+                num_samples += batch_size 
                 if is_master(args) and (i % 100) == 0:
                     logging.info(
                         f"Eval Epoch: {epoch} [{num_samples} / {samples_per_val}]\t"
-                        f"Clip Loss: {cumulative_loss / num_samples:.6f}\t")
+                        f"Total Loss: {cumulative_total_loss / num_samples:.6f}, Contrastive Loss: {cumulative_contrastive_loss / num_samples:.6f}\t"
+                        f"Negative Loss: {cumulative_neg_loss / num_samples:.6f}, Property Loss: {cumulative_property_loss / num_samples:.6f}, Counting Loss: {cumulative_counting_loss / num_samples:.6f}, Spatial Loss: {cumulative_spatial_loss / num_samples:.6f}\t" if neg_loss is not None else ""
+                        )
 
                     if gen_loss is not None:
                         cumulative_gen_loss += gen_loss * batch_size
                         logging.info(
                             f"Generative Loss: {cumulative_gen_loss / num_samples:.6f}\t")
+                
 
             val_metrics = get_clip_metrics(
                 image_features=torch.cat(all_image_features),
                 text_features=torch.cat(all_text_features),
                 logit_scale=logit_scale.cpu(),
             )
-            loss = cumulative_loss / num_samples
+            loss = cumulative_total_loss / num_samples
             metrics.update(
-                {**val_metrics, "clip_val_loss": loss.item(), "epoch": epoch, "num_samples": num_samples}
+                {**val_metrics, "clip_val_total_loss": loss.item(), "epoch": epoch, "num_samples": num_samples}
             )
+
+            if cumulative_neg_loss is not None:
+                metrics.update(
+                    {
+                        "clip_val_contrastive_loss": (cumulative_contrastive_loss / num_samples).item(),
+                        "clip_val_neg_loss": (cumulative_neg_loss / num_samples).item(),
+                        "clip_val_property_loss": (cumulative_property_loss / num_samples).item(),
+                        "clip_val_counting_loss": (cumulative_counting_loss / num_samples).item(),
+                        "clip_val_spatial_loss": (cumulative_spatial_loss / num_samples).item(),
+                    }
+                )
+
             if gen_loss is not None:
                 gen_loss = cumulative_gen_loss / num_samples
                 metrics.update({"val_generative_loss": gen_loss.item()})
@@ -447,3 +482,57 @@ def maybe_compute_generative_loss(model_out):
         token_logits = model_out["logits"]
         token_labels = model_out["labels"]
         return F.cross_entropy(token_logits.permute(0, 2, 1), token_labels)
+
+def maybe_compute_neg_loss(args, model_out):
+
+    def get_group_loss(image_feats, pos_feats, neg_feats, logit_scale):
+        """
+        image_feats : (B, D)
+        pos_feats   : (B, D)
+        neg_feats   : (B, K, D)  或  (B, D)  或  None
+        """
+        B, D = image_feats.shape
+        device = image_feats.device
+
+        pos_feats = pos_feats.unsqueeze(1)
+
+        if neg_feats is None:
+            feat_cat = pos_feats  # (B, 1, D)
+        else:
+            if neg_feats.dim() == 2:
+                neg_feats = neg_feats.unsqueeze(1)  # (B, 1, D)
+            feat_cat = torch.cat([pos_feats, neg_feats], dim=1)  # (B, 1+K, D)
+
+        logits = logit_scale * torch.matmul(
+            feat_cat, image_feats.unsqueeze(2)  # (B, 1+K, 1)
+        ).squeeze(-1)
+
+        target = torch.zeros(B, dtype=torch.long, device=device)  # 正样本在 0 位
+        return F.cross_entropy(logits, target)
+    
+    if args.vl_negs:
+        image_features = model_out["image_features"]
+        logit_scale = model_out["logit_scale"]
+        property_pos_features = model_out["property_pos_features"]
+        property_neg_features = model_out["property_neg_features"]
+        counting_pos_features = model_out["counting_pos_features"]
+        counting_neg_features = model_out["counting_neg_features"]
+        spatial_pos_features = model_out["spatial_pos_features"]
+        spatial_neg_features = model_out["spatial_neg_features"]
+        if property_pos_features is not None:
+            property_loss = get_group_loss(
+                image_features, property_pos_features, property_neg_features, logit_scale)
+
+        if counting_pos_features is not None:
+            counting_loss = get_group_loss(
+                image_features, counting_pos_features, counting_neg_features, logit_scale)
+
+        if spatial_pos_features is not None:
+            spatial_loss = get_group_loss(
+                image_features, spatial_pos_features, spatial_neg_features, logit_scale)
+
+        
+
+        property_weight, counting_weight, spatial_weight = args.neg_w
+        neg_loss = property_weight * property_loss + counting_weight * counting_loss + spatial_weight * spatial_loss
+        return neg_loss, property_loss, counting_loss, spatial_loss

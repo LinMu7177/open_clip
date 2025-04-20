@@ -516,7 +516,7 @@ def parse_args(args):
 
     parser.add_argument("--num-negs", default=1, type=int, help="number of negative examples", )
     parser.add_argument("--no_neg_in_contrastive", default=False, action="store_true", help="no_neg_in_contrastive")
-    parser.add_argument("--neg_w", type=int, default=1, help="negative loss weighting")
+    parser.add_argument("--neg_w", type=int, nargs=3, default=[1, 1, 1], help="negative loss weighting (property, counting, spatial)")
 
     args = parser.parse_args(args)
 

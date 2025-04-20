@@ -90,6 +90,7 @@ class ClipLoss(nn.Module):
     def forward(self, image_features, text_features, logit_scale, property_pos_features, property_neg_features, counting_pos_features, counting_neg_features, spatial_pos_features, spatial_neg_features):
         device = image_features.device
 
+        neg_loss = 0.
         property_loss = 0.
         counting_loss = 0.
         spatial_loss = 0.
@@ -141,10 +142,11 @@ class ClipLoss(nn.Module):
 
         total_loss = contrastive_loss
         if self.args.vl_negs:
-            neg_sum = property_loss + counting_loss + spatial_loss
-            total_loss = total_loss + self.args.neg_w * neg_sum
+            property_weight, counting_weight, spatial_weight = self.args.neg_w
+            neg_loss = property_weight * property_loss + counting_weight * counting_loss + spatial_weight * spatial_loss
+            total_loss = total_loss + neg_loss
 
-        return total_loss, property_loss, counting_loss, spatial_loss
+        return total_loss, contrastive_loss, neg_loss, property_loss, counting_loss, spatial_loss
 
     def get_group_loss(self, image_feats, pos_feats, neg_feats, logit_scale):
         """
