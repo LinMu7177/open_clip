@@ -475,6 +475,8 @@ def main(args):
         return
 
     loss = create_loss(args)
+    best_loss = float('inf')
+    early_stop_step = args.early_stop_step
 
     for epoch in range(start_epoch, args.epochs):
         if is_master(args):
@@ -484,7 +486,7 @@ def main(args):
         completed_epoch = epoch + 1
 
         if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):
-            evaluate(model, data, completed_epoch, args, tb_writer=writer, tokenizer=tokenizer)
+            metrics = evaluate(model, data, completed_epoch, args, tb_writer=writer, tokenizer=tokenizer)
 
         # Saving checkpoints.
         if args.save_logs:
@@ -497,13 +499,32 @@ def main(args):
             if scaler is not None:
                 checkpoint_dict["scaler"] = scaler.state_dict()
 
-            if completed_epoch == args.epochs or (
-                args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0
-            ):
-                torch.save(
-                    checkpoint_dict,
-                    os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
-                )
+            # if completed_epoch == args.epochs or (
+            #     args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0
+            # ):
+            #     torch.save(
+            #         checkpoint_dict,
+            #         os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
+            #     )
+
+            if args.ckpt_loss_filter is not None:
+                key = 'clip_val_' + args.ckpt_loss_filter + '_loss'
+                cur_loss = metrics[key]
+                if cur_loss < best_loss:
+                    best_loss = cur_loss
+                    early_stop_step = args.early_stop_step
+                    logging.info(f'Saving best checkpoint at epoch {completed_epoch} with loss {best_loss}.')
+                    torch.save(
+                        checkpoint_dict,
+                        os.path.join(args.checkpoint_path, f"epoch_best.pt"),
+                    )
+                else:
+                    early_stop_step -= 1
+                    logging.info(f'Checkpoint loss {cur_loss} not better than best loss {best_loss}. Early stop remain step: {early_stop}.')
+                    if early_stop_step <= 0:
+                        logging.info('Early stop triggered.')
+                        break
+
             if args.delete_previous_checkpoint:
                 previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
                 if os.path.exists(previous_checkpoint):
