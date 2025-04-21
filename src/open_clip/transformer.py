@@ -9,7 +9,7 @@ import torch.nn.init as init
 from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
 
-from .utils import to_2tuple
+from .utils import to_2tuple, get_visible_matrix
 from .pos_embed import get_2d_sincos_pos_embed
 
 
@@ -356,7 +356,7 @@ class Transformer(nn.Module):
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
         if not self.batch_first:
             x = x.transpose(0, 1).contiguous()    # NLD -> LND
-        for r in self.resblocks:
+        for i, r in enumerate(self.resblocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
                 x = checkpoint(r, x, None, None, attn_mask)
@@ -629,7 +629,8 @@ class VisionTransformer(nn.Module):
 
         x = self.patch_dropout(x)
         x = self.ln_pre(x)
-        x = self.transformer(x)
+        # add visible matrix
+        x = self.transformer(x, attn_mask=get_visible_matrix(alpha))
 
         if self.attn_pool is not None:
             if self.attn_pool_contrastive is not None:
