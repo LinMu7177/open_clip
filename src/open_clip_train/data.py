@@ -33,6 +33,9 @@ import torchvision.transforms.functional as F
 
 from open_clip_train.svlc_learning.negs_and_pos import Negatives,NegativesLLM, ChunkSample,BothNegatives
 
+from open_clip.utils import get_visible_matrix_v2
+from open_clip.factory import get_model_config
+
 from torch import Tensor
 from collections.abc import Sequence
 from typing import List, Tuple
@@ -506,6 +509,15 @@ def get_objects_sense(sample, objects_sense_format):
     edges = objects_sense_normalize(edges)
     return edges
 
+
+def get_visible_matrix(sample, patch_size):
+    edges_mask_tensor = sample['objects_sense'].squeeze(0)  # (1, H, W) -> (H, W)
+    edges_mask = edges_mask_tensor.cpu().detach().numpy()
+    
+    vm = get_visible_matrix_v2(edges_mask, patch_size)
+    return vm
+
+
 def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None, num_workers=4):
     input_shards = args.train_data if is_train else args.val_data
     assert input_shards is not None
@@ -573,6 +585,11 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
             sample['objects_sense'] = get_objects_sense(sample, args.objects_sense_format)
             return sample
 
+        patch_size = get_model_config(args.model)['vision_cfg']['patch_size']
+        def add_visible_matrix(sample):
+            sample['visible_matrix'] = get_visible_matrix(sample, patch_size)
+            return sample
+
         preprocess_img.transforms = preprocess_img.transforms[1:]
         pipeline.extend([
             wds.select(filter_no_caption_or_no_image),
@@ -581,6 +598,14 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
             wds.map(add_objects_sense),
             wds.map(join_preprocess)
         ])
+        tuple_keys = ["image", "text", "objects_sense"]
+
+        if args.use_visible_matrix:
+
+            pipeline.extend([
+                wds.map(add_visible_matrix),
+            ])
+            tuple_keys.append("visible_matrix")
 
         if args.vl_negs:
             pipeline.extend([
@@ -592,23 +617,21 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
                                         'spatial_pos': sample['info']['PN']['spatial'][0]['Positive'],
                                         'spatial_neg': sample['info']['PN']['spatial'][0]['Negative']
                                         }),
-                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0],
-                             property_pos=lambda property_pos: tokenizer(property_pos)[0],
+                wds.map_dict(property_pos=lambda property_pos: tokenizer(property_pos)[0],
                              property_neg=lambda property_neg: tokenizer(property_neg)[0],
                              counting_pos=lambda counting_pos: tokenizer(counting_pos)[0],
                              counting_neg=lambda counting_neg: tokenizer(counting_neg)[0],
                              spatial_pos=lambda spatial_pos: tokenizer(spatial_pos)[0],
                              spatial_neg=lambda spatial_neg: tokenizer(spatial_neg)[0]
                              ),
-                wds.to_tuple("image", "text", "objects_sense", "property_pos", "property_neg", "counting_pos", "counting_neg", "spatial_pos", "spatial_neg"),
-                wds.batched(args.batch_size, partial=not is_train)
             ])
-        else:
-            pipeline.extend([
-                wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-                wds.to_tuple("image", "text", "objects_sense"),
-                wds.batched(args.batch_size, partial=not is_train)
-            ])
+            tuple_keys.extend(['property_pos', 'property_neg', 'counting_pos', 'counting_neg', 'spatial_pos', 'spatial_neg'])
+
+        pipeline.extend([
+            wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
+            wds.to_tuple(*tuple_keys),
+            wds.batched(args.batch_size, partial=not is_train)
+        ])
 
     else:
         pipeline.extend([

@@ -105,7 +105,17 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         if not args.skip_scheduler:
             scheduler(step)
 
-        if args.objects_sense_format and args.neg_type:
+        if args.objects_sense_format and args.neg_type and args.use_visible_matrix:
+            images, texts, objects_sense, visible_matrix, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
+            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+            visible_matrix = visible_matrix.to(device=device, non_blocking=True)
+            property_pos = property_pos.to(device=device, non_blocking=True)
+            property_neg = property_neg.to(device=device, non_blocking=True)
+            counting_pos = counting_pos.to(device=device, non_blocking=True)
+            counting_neg = counting_neg.to(device=device, non_blocking=True)
+            spatial_pos = spatial_pos.to(device=device, non_blocking=True)
+            spatial_neg = spatial_neg.to(device=device, non_blocking=True)
+        elif args.objects_sense_format and args.neg_type:
             images, texts, objects_sense, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
             objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
             property_pos = property_pos.to(device=device, non_blocking=True)
@@ -114,6 +124,10 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
             counting_neg = counting_neg.to(device=device, non_blocking=True)
             spatial_pos = spatial_pos.to(device=device, non_blocking=True)
             spatial_neg = spatial_neg.to(device=device, non_blocking=True)
+        elif args.obects_sense_format and args.use_visible_matrix:
+            images, texts, objects_sense, visible_matrix = batch
+            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+            visible_matrix = visible_matrix.to(device=device, non_blocking=True)
         elif args.objects_sense_format:
             images, texts, objects_sense = batch
             objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
@@ -130,8 +144,21 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         if args.accum_freq == 1:
             with autocast():
                 if args.objects_sense_format and args.neg_type:
-                    model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
-                                      counting_neg, spatial_pos, spatial_neg)
+                    # model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
+                    #                   counting_neg, spatial_pos, spatial_neg)
+                    model_out = model(
+                        image=images,
+                        text=texts,
+                        objects_sense=objects_sense,
+                        visible_matrix=visible_matrix if args.use_visible_matrix else None,
+                        visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
+                        property_pos=property_pos,
+                        property_neg=property_neg,
+                        counting_pos=counting_pos,
+                        counting_neg=counting_neg,
+                        spatial_pos=spatial_pos,
+                        spatial_neg=spatial_neg,
+                    )
                 else:
                     model_out = model(images, texts, objects_sense)
                 logit_scale = model_out["logit_scale"]
@@ -328,7 +355,17 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
         all_image_features, all_text_features = [], []
         with torch.inference_mode():
             for i, batch in enumerate(dataloader):
-                if args.objects_sense_format and args.neg_type:
+                if args.objects_sense_format and args.neg_type and args.use_visible_matrix:
+                    images, texts, objects_sense, visible_matrix, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
+                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+                    visible_matrix = visible_matrix.to(device=device, non_blocking=True)
+                    property_pos = property_pos.to(device=device, non_blocking=True)
+                    property_neg = property_neg.to(device=device, non_blocking=True)
+                    counting_pos = counting_pos.to(device=device, non_blocking=True)
+                    counting_neg = counting_neg.to(device=device, non_blocking=True)
+                    spatial_pos = spatial_pos.to(device=device, non_blocking=True)
+                    spatial_neg = spatial_neg.to(device=device, non_blocking=True)
+                elif args.objects_sense_format and args.neg_type:
                     images, texts, objects_sense, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
                     objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
                     property_pos = property_pos.to(device=device, non_blocking=True)
@@ -337,6 +374,10 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                     counting_neg = counting_neg.to(device=device, non_blocking=True)
                     spatial_pos = spatial_pos.to(device=device, non_blocking=True)
                     spatial_neg = spatial_neg.to(device=device, non_blocking=True)
+                elif args.obects_sense_format and args.use_visible_matrix:
+                    images, texts, objects_sense, visible_matrix = batch
+                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
+                    visible_matrix = visible_matrix.to(device=device, non_blocking=True)
                 elif args.objects_sense_format:
                     images, texts, objects_sense = batch
                     objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
@@ -349,8 +390,21 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                 with autocast():
 
                     if args.objects_sense_format and args.neg_type:
-                        model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
-                                          counting_neg, spatial_pos, spatial_neg)
+                        # model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
+                        #                   counting_neg, spatial_pos, spatial_neg)
+                        model_out = model(
+                            image=images,
+                            text=texts,
+                            objects_sense=objects_sense,
+                            visible_matrix=visible_matrix if args.use_visible_matrix else None,
+                            visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
+                            property_pos=property_pos,
+                            property_neg=property_neg,
+                            counting_pos=counting_pos,
+                            counting_neg=counting_neg,
+                            spatial_pos=spatial_pos,
+                            spatial_neg=spatial_neg,
+                        )
                     else:
                         model_out = model(images, texts, objects_sense)
                     image_features = model_out["image_features"]

@@ -275,8 +275,8 @@ class CLIP(nn.Module):
                 no_wd.add('visual.' + n)
         return no_wd
 
-    def encode_image(self, image, object_sense=None, normalize: bool = False):
-        features = self.visual(image, object_sense)
+    def encode_image(self, image, object_sense=None, visible_matrix=None, visible_matrix_layers=None, normalize: bool = False):
+        features = self.visual(image, object_sense, visible_matrix, visible_matrix_layers)
         return F.normalize(features, dim=-1) if normalize else features
 
     def encode_text(self, text, normalize: bool = False):
@@ -310,6 +310,8 @@ class CLIP(nn.Module):
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
             objects_sense: Optional[torch.Tensor] = None,
+            visible_matrix: Optional[torch.Tensor] = None,
+            visible_matrix_layers: Optional[int] = None,
             property_pos: Optional[torch.Tensor] = None,
             property_neg: Optional[torch.Tensor] = None,
             counting_pos: Optional[torch.Tensor] = None,
@@ -317,11 +319,7 @@ class CLIP(nn.Module):
             spatial_pos: Optional[torch.Tensor] = None,
             spatial_neg: Optional[torch.Tensor] = None
     ):
-        if objects_sense is not None:
-            image_features = self.encode_image(image, objects_sense, normalize=True) if image is not None else None
-        else:
-            image_features = self.encode_image(image, normalize=True) if image is not None else None
-
+        image_features = self.encode_image(image, objects_sense, visible_matrix, visible_matrix_layers, normalize=True) if image is not None else None
         text_features = self.encode_text(text, normalize=True) if text is not None else None
 
         property_pos_features = self.encode_text(property_pos, normalize=True) if property_pos is not None else None

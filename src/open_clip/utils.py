@@ -204,3 +204,20 @@ def get_visible_matrix(edges_mask_batch):
     # Return stacked tensor
     return torch.stack(attn_masks, dim=0)
 
+def get_visible_matrix_v2(edges_mask, patch_size):
+    # fill + 连通组件分析
+    labels = fill_edges_to_objects(edges_mask)
+    # 按照 patch_size，对 labels 做统计，得到 patch -> object
+    patch_map = patch_to_object_mapping(labels, patch_size)
+
+    visible_matrix = generate_object_attention_mask(patch_map)
+
+    visible_matrix = torch.tensor(visible_matrix, dtype=torch.float32)
+
+    # 构造attention mask
+    visible_matrix = torch.where(
+        visible_matrix.bool(),
+        torch.zeros_like(visible_matrix, dtype=torch.float32),    # 相同object，mask 0（正常）
+        torch.full_like(visible_matrix, fill_value=-1e9, dtype=torch.float32)  # 不同object，mask为-∞
+    )
+    return visible_matrix

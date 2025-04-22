@@ -521,6 +521,9 @@ def parse_args(args):
     parser.add_argument("--ckpt_loss_filter", type=str, choices=['total', 'neg'], default="total", help="Which loss to use for filtering checkpoints")
     parser.add_argument("--early_stop_step", type=int, default=3, help="Early stop step")
 
+    parser.add_argument("--use_visible_matrix", default=False, action="store_true", help="use visible matrix")
+    parser.add_argument("--visible_matrix_layers", default=3, type=int, help="use visible matrix layers")
+
     args = parser.parse_args(args)
 
     if 'timm' not in args.opt:
