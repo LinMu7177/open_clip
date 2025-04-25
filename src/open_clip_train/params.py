@@ -510,6 +510,9 @@ def parse_args(args):
         default=None,
         help="Type of negative case creator",
     )
+
+    parser.add_argument("--obects_sense_format", type=str, default=None, help="Format of objects sense")
+
     parser.add_argument("--vl-negs", default=False, action="store_true", help="vl negatives")
     parser.add_argument('--vl_neg_type', default=['color', 'action', 'material', 'size', 'state'], nargs='+')
     parser.add_argument('--llm_neg_types', default=['VERB', 'NOUN', 'ADP', 'ADJ', 'PROPN'], nargs='+')

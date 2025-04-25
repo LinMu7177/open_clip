@@ -541,7 +541,7 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
 
     if is_train and args.train_data_upsampling_factors is not None:
         assert resampled, "--train_data_upsampling_factors is only supported when sampling with replacement (with --dataset-resampled)."
-    
+
     if resampled:
         pipeline = [ResampledShards2(
             input_shards,
@@ -580,68 +580,82 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
             wds.tarfile_to_samples(handler=log_and_continue),
         ])
 
-    if args.objects_sense_format:
-        def add_objects_sense(sample):
-            sample['objects_sense'] = get_objects_sense(sample, args.objects_sense_format)
-            return sample
+    # base pipeline
+    pipeline.extend([
+        wds.select(filter_no_caption_or_no_image),
+        wds.decode("pilrgb", handler=log_and_continue),
+        wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt", info="json"),
+    ])
+    tuple_keys = ["image", "text"]
 
-        patch_size = get_model_config(args.model)['vision_cfg']['patch_size']
-        def add_visible_matrix(sample):
-            sample['visible_matrix'] = get_visible_matrix(sample, patch_size)
+    # add objects_sense
+    if args.objects_sense_format:
+
+        def add_objects_sense(sample):
+            sample["objects_sense"] = get_objects_sense(
+                sample, args.objects_sense_format
+            )
             return sample
 
         preprocess_img.transforms = preprocess_img.transforms[1:]
-        pipeline.extend([
-            wds.select(filter_no_caption_or_no_image),
-            wds.decode("pilrgb", handler=log_and_continue),
-            wds.rename(key="__key__",image="jpg;png;jpeg;webp", text="txt", info="json"),
-            wds.map(add_objects_sense),
-            wds.map(join_preprocess)
-        ])
-        tuple_keys = ["image", "text", "objects_sense"]
+        pipeline.extend([wds.map(add_objects_sense), wds.map(join_preprocess)])
+        tuple_keys.append("objects_sense")
 
         if args.use_visible_matrix:
+            patch_size = get_model_config(args.model)["vision_cfg"]["patch_size"]
 
-            pipeline.extend([
-                wds.map(add_visible_matrix),
-            ])
+            def add_visible_matrix(sample):
+                sample["visible_matrix"] = get_visible_matrix(sample, patch_size)
+                return sample
+
+            pipeline.extend(
+                [
+                    wds.map(add_visible_matrix),
+                ]
+            )
             tuple_keys.append("visible_matrix")
 
-        if args.vl_negs:
-            pipeline.extend([
-                wds.map(lambda sample: {**sample,
-                                        'property_pos':sample['info']['PN']['property'][0]['Positive'],
-                                        'property_neg':sample['info']['PN']['property'][0]['Negative'],
-                                        'counting_pos': sample['info']['PN']['counting'][0]['Positive'],
-                                        'counting_neg': sample['info']['PN']['counting'][0]['Negative'],
-                                        'spatial_pos': sample['info']['PN']['spatial'][0]['Positive'],
-                                        'spatial_neg': sample['info']['PN']['spatial'][0]['Negative']
-                                        }),
-                wds.map_dict(property_pos=lambda property_pos: tokenizer(property_pos)[0],
-                             property_neg=lambda property_neg: tokenizer(property_neg)[0],
-                             counting_pos=lambda counting_pos: tokenizer(counting_pos)[0],
-                             counting_neg=lambda counting_neg: tokenizer(counting_neg)[0],
-                             spatial_pos=lambda spatial_pos: tokenizer(spatial_pos)[0],
-                             spatial_neg=lambda spatial_neg: tokenizer(spatial_neg)[0]
-                             ),
-            ])
-            tuple_keys.extend(['property_pos', 'property_neg', 'counting_pos', 'counting_neg', 'spatial_pos', 'spatial_neg'])
-
-        pipeline.extend([
+    if args.vl_negs:
+        pipeline.extend(
+            [
+                wds.map(
+                    lambda sample: {
+                        **sample,
+                        "property_pos": sample["info"]["PN"]["property"][0]["Positive"],
+                        "property_neg": sample["info"]["PN"]["property"][0]["Negative"],
+                        "counting_pos": sample["info"]["PN"]["counting"][0]["Positive"],
+                        "counting_neg": sample["info"]["PN"]["counting"][0]["Negative"],
+                        "spatial_pos": sample["info"]["PN"]["spatial"][0]["Positive"],
+                        "spatial_neg": sample["info"]["PN"]["spatial"][0]["Negative"],
+                    }
+                ),
+                wds.map_dict(
+                    property_pos=lambda property_pos: tokenizer(property_pos)[0],
+                    property_neg=lambda property_neg: tokenizer(property_neg)[0],
+                    counting_pos=lambda counting_pos: tokenizer(counting_pos)[0],
+                    counting_neg=lambda counting_neg: tokenizer(counting_neg)[0],
+                    spatial_pos=lambda spatial_pos: tokenizer(spatial_pos)[0],
+                    spatial_neg=lambda spatial_neg: tokenizer(spatial_neg)[0],
+                ),
+            ]
+        )
+        tuple_keys.extend(
+            [
+                "property_pos",
+                "property_neg",
+                "counting_pos",
+                "counting_neg",
+                "spatial_pos",
+                "spatial_neg",
+            ]
+        )
+    pipeline.extend(
+        [
             wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
             wds.to_tuple(*tuple_keys),
-            wds.batched(args.batch_size, partial=not is_train)
-        ])
-
-    else:
-        pipeline.extend([
-            wds.select(filter_no_caption_or_no_image),
-            wds.decode("pilrgb", handler=log_and_continue),
-            wds.rename(image="jpg;png;jpeg;webp", text="txt"),
-            wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-            wds.to_tuple("image", "text"),
-            wds.batched(args.batch_size, partial=not is_train)
-        ])
+            wds.batched(args.batch_size, partial=not is_train),
+        ]
+    )
 
     dataset = wds.DataPipeline(*pipeline)
 
@@ -789,7 +803,7 @@ def get_dataset_fn(data_path, dataset_type):
                 f"Tried to figure out dataset type, but failed for extension {ext}.")
     else:
         raise ValueError(f"Unsupported dataset type: {dataset_type}")
-    
+
 
 def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
     preprocess_train, preprocess_val = preprocess_fns
@@ -812,5 +826,3 @@ def get_data(args, preprocess_fns, epoch=0, tokenizer=None):
         data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
 
     return data
-
-

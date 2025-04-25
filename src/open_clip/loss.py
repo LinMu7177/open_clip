@@ -90,10 +90,10 @@ class ClipLoss(nn.Module):
     def forward(self, image_features, text_features, logit_scale, property_pos_features, property_neg_features, counting_pos_features, counting_neg_features, spatial_pos_features, spatial_neg_features):
         device = image_features.device
 
-        neg_loss = 0.
-        property_loss = 0.
-        counting_loss = 0.
-        spatial_loss = 0.
+        neg_loss = torch.zeros(()).to(device)
+        property_loss = torch.zeros(()).to(device)
+        counting_loss = torch.zeros(()).to(device)
+        spatial_loss = torch.zeros(()).to(device)
 
         if self.args.vl_negs:
             if property_pos_features is not None:

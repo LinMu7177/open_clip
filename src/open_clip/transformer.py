@@ -622,7 +622,7 @@ class VisionTransformer(nn.Module):
         return pooled, tokens
 
     def forward(self, x: torch.Tensor, alpha=None, visible_matrix=None, visible_matrix_layers=None):
-        if alpha is not None:
+        if alpha is not None and visible_matrix is None:
             x = self.conv1(x) + self.conv1_alpha(alpha)
         else:
             x = self.conv1(x)  # shape = [*, width, grid, grid]

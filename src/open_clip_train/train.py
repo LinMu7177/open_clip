@@ -75,8 +75,7 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, objects_sense_format,
-                    tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision, device_type=device.type)
     input_dtype = get_input_dtype(args.precision)
@@ -100,67 +99,52 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
     for i, batch in enumerate(dataloader):
         i_accum = i // args.accum_freq
         step = num_batches_per_epoch * epoch + i_accum
-        neg_texts = None
 
         if not args.skip_scheduler:
             scheduler(step)
 
-        if args.objects_sense_format and args.neg_type and args.use_visible_matrix:
-            images, texts, objects_sense, visible_matrix, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
-            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-            visible_matrix = visible_matrix.to(device=device, non_blocking=True)
-            property_pos = property_pos.to(device=device, non_blocking=True)
-            property_neg = property_neg.to(device=device, non_blocking=True)
-            counting_pos = counting_pos.to(device=device, non_blocking=True)
-            counting_neg = counting_neg.to(device=device, non_blocking=True)
-            spatial_pos = spatial_pos.to(device=device, non_blocking=True)
-            spatial_neg = spatial_neg.to(device=device, non_blocking=True)
-        elif args.objects_sense_format and args.neg_type:
-            images, texts, objects_sense, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
-            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-            property_pos = property_pos.to(device=device, non_blocking=True)
-            property_neg = property_neg.to(device=device, non_blocking=True)
-            counting_pos = counting_pos.to(device=device, non_blocking=True)
-            counting_neg = counting_neg.to(device=device, non_blocking=True)
-            spatial_pos = spatial_pos.to(device=device, non_blocking=True)
-            spatial_neg = spatial_neg.to(device=device, non_blocking=True)
-        elif args.obects_sense_format and args.use_visible_matrix:
-            images, texts, objects_sense, visible_matrix = batch
-            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-            visible_matrix = visible_matrix.to(device=device, non_blocking=True)
-        elif args.objects_sense_format:
-            images, texts, objects_sense = batch
-            objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-        else:
-            images, texts = batch
-            objects_sense = None
+        objects_sense = None
+        visible_matrix = None
+        property_pos = None
+        property_neg = None
+        counting_pos = None
+        counting_neg = None
+        spatial_pos = None
+        spatial_neg = None
 
-        images = images.to(device=device, dtype=input_dtype, non_blocking=True)
-        texts = texts.to(device=device, non_blocking=True)
+        images, texts = batch[0].to(device=device, non_blocking=True), batch[1].to(device=device, non_blocking=True)
+        if args.objects_sense_format:
+            objects_sense = batch[2].to(device=device, non_blocking=True)
+            if args.use_visible_matrix:
+                visible_matrix = batch[3].to(device=device, non_blocking=True)
+        if args.vl_negs:
+            start_idx = 2 + (1 if args.objects_sense_format else 0) + (1 if args.use_visible_matrix else 0)
+            
+            property_pos = batch[start_idx].to(device=device, non_blocking=True)
+            property_neg = batch[start_idx + 1].to(device=device, non_blocking=True)
+            counting_pos = batch[start_idx + 2].to(device=device, non_blocking=True)
+            counting_neg = batch[start_idx + 3].to(device=device, non_blocking=True)
+            spatial_pos = batch[start_idx + 4].to(device=device, non_blocking=True)
+            spatial_neg = batch[start_idx + 5].to(device=device, non_blocking=True)
 
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
             with autocast():
-                if args.objects_sense_format and args.neg_type:
-                    # model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
-                    #                   counting_neg, spatial_pos, spatial_neg)
-                    model_out = model(
-                        image=images,
-                        text=texts,
-                        objects_sense=objects_sense,
-                        visible_matrix=visible_matrix if args.use_visible_matrix else None,
-                        visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
-                        property_pos=property_pos,
-                        property_neg=property_neg,
-                        counting_pos=counting_pos,
-                        counting_neg=counting_neg,
-                        spatial_pos=spatial_pos,
-                        spatial_neg=spatial_neg,
-                    )
-                else:
-                    model_out = model(images, texts, objects_sense)
+                model_out = model(
+                            image=images,
+                            text=texts,
+                            objects_sense=objects_sense,
+                            visible_matrix=visible_matrix,
+                            visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
+                            property_pos=property_pos,
+                            property_neg=property_neg,
+                            counting_pos=counting_pos,
+                            counting_neg=counting_neg,
+                            spatial_pos=spatial_pos,
+                            spatial_neg=spatial_neg,
+                        )
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
@@ -345,58 +329,45 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
 
         # FIXME this does not scale past small eval datasets
         # all_image_features @ all_text_features will blow up memory and compute very quickly
-        cumulative_total_loss = 0.0
-        cumulative_contrastive_loss = 0.0
-        cumulative_gen_loss = 0.0
-        cumulative_neg_loss = 0.0
-        cumulative_property_loss = 0.0
-        cumulative_counting_loss = 0.0
-        cumulative_spatial_loss = 0.0
+        cumulative_total_loss = torch.zeros(()).to(device)
+        cumulative_contrastive_loss = torch.zeros(()).to(device)
+        cumulative_gen_loss = torch.zeros(()).to(device)
+        cumulative_neg_loss = torch.zeros(()).to(device)
+        cumulative_property_loss = torch.zeros(()).to(device)
+        cumulative_counting_loss = torch.zeros(()).to(device)
+        cumulative_spatial_loss = torch.zeros(()).to(device)
         all_image_features, all_text_features = [], []
         with torch.inference_mode():
             for i, batch in enumerate(dataloader):
-                if args.objects_sense_format and args.neg_type and args.use_visible_matrix:
-                    images, texts, objects_sense, visible_matrix, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
-                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-                    visible_matrix = visible_matrix.to(device=device, non_blocking=True)
-                    property_pos = property_pos.to(device=device, non_blocking=True)
-                    property_neg = property_neg.to(device=device, non_blocking=True)
-                    counting_pos = counting_pos.to(device=device, non_blocking=True)
-                    counting_neg = counting_neg.to(device=device, non_blocking=True)
-                    spatial_pos = spatial_pos.to(device=device, non_blocking=True)
-                    spatial_neg = spatial_neg.to(device=device, non_blocking=True)
-                elif args.objects_sense_format and args.neg_type:
-                    images, texts, objects_sense, property_pos, property_neg, counting_pos, counting_neg, spatial_pos, spatial_neg = batch
-                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-                    property_pos = property_pos.to(device=device, non_blocking=True)
-                    property_neg = property_neg.to(device=device, non_blocking=True)
-                    counting_pos = counting_pos.to(device=device, non_blocking=True)
-                    counting_neg = counting_neg.to(device=device, non_blocking=True)
-                    spatial_pos = spatial_pos.to(device=device, non_blocking=True)
-                    spatial_neg = spatial_neg.to(device=device, non_blocking=True)
-                elif args.obects_sense_format and args.use_visible_matrix:
-                    images, texts, objects_sense, visible_matrix = batch
-                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-                    visible_matrix = visible_matrix.to(device=device, non_blocking=True)
-                elif args.objects_sense_format:
-                    images, texts, objects_sense = batch
-                    objects_sense = objects_sense.to(device=device, dtype=input_dtype, non_blocking=True)
-                else:
-                    images, texts = batch
-                    objects_sense = None
-                images = images.to(device=device, dtype=input_dtype, non_blocking=True)
-                texts = texts.to(device=device, non_blocking=True)
+                objects_sense = None
+                visible_matrix = None
+                property_pos = None
+                property_neg = None
+                counting_pos = None
+                counting_neg = None
+                spatial_pos = None
+                spatial_neg = None
+
+                images, texts = batch[0].to(device=device, non_blocking=True), batch[1].to(device=device, non_blocking=True)
+                if args.objects_sense_format:
+                    objects_sense = batch[2].to(device=device, non_blocking=True)
+                    if args.use_visible_matrix:
+                        visible_matrix = batch[3].to(device=device, non_blocking=True)
+                if args.vl_negs:
+                    start_idx = 2 + (1 if args.objects_sense_format else 0) + (1 if args.use_visible_matrix else 0)
+                    property_pos = batch[start_idx].to(device=device, non_blocking=True)
+                    property_neg = batch[start_idx + 1].to(device=device, non_blocking=True)
+                    counting_pos = batch[start_idx + 2].to(device=device, non_blocking=True)
+                    counting_neg = batch[start_idx + 3].to(device=device, non_blocking=True)
+                    spatial_pos = batch[start_idx + 4].to(device=device, non_blocking=True)
+                    spatial_neg = batch[start_idx + 5].to(device=device, non_blocking=True)
 
                 with autocast():
-
-                    if args.objects_sense_format and args.neg_type:
-                        # model_out = model(images, texts, objects_sense, property_pos, property_neg, counting_pos,
-                        #                   counting_neg, spatial_pos, spatial_neg)
-                        model_out = model(
+                    model_out = model(
                             image=images,
                             text=texts,
                             objects_sense=objects_sense,
-                            visible_matrix=visible_matrix if args.use_visible_matrix else None,
+                            visible_matrix=visible_matrix,
                             visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
                             property_pos=property_pos,
                             property_neg=property_neg,
@@ -405,8 +376,6 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                             spatial_pos=spatial_pos,
                             spatial_neg=spatial_neg,
                         )
-                    else:
-                        model_out = model(images, texts, objects_sense)
                     image_features = model_out["image_features"]
                     text_features = model_out["text_features"]
                     logit_scale = model_out["logit_scale"]
@@ -590,3 +559,5 @@ def maybe_compute_neg_loss(args, model_out):
         property_weight, counting_weight, spatial_weight = args.neg_w
         neg_loss = property_weight * property_loss + counting_weight * counting_loss + spatial_weight * spatial_loss
         return neg_loss, property_loss, counting_loss, spatial_loss
+    else:
+        return None, None, None, None

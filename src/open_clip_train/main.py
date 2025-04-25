@@ -482,7 +482,7 @@ def main(args):
         if is_master(args):
             logging.info(f'Start epoch {epoch}')
 
-        train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, args.objects_sense_format, tb_writer=writer)
+        train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, tb_writer=writer)
         completed_epoch = epoch + 1
 
         if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):
@@ -520,7 +520,7 @@ def main(args):
                     )
                 else:
                     early_stop_step -= 1
-                    logging.info(f'Checkpoint loss {cur_loss} not better than best loss {best_loss}. Early stop remain step: {early_stop}.')
+                    logging.info(f'Checkpoint loss {cur_loss} not better than best loss {best_loss}. Early stop remain step: {early_stop_step}.')
                     if early_stop_step <= 0:
                         logging.info('Early stop triggered.')
                         break
