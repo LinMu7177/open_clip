@@ -32,6 +32,7 @@ import torchvision.transforms.functional as F
 # from torchvision.transforms.transforms import JointRandomResizedCrop
 
 from open_clip_train.svlc_learning.negs_and_pos import Negatives,NegativesLLM, ChunkSample,BothNegatives
+from open_clip_train.svlc_learning.pns_generater import generate_pns
 
 from open_clip.utils import get_visible_matrix_v2
 from open_clip.factory import get_model_config
@@ -621,12 +622,7 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
                 wds.map(
                     lambda sample: {
                         **sample,
-                        "property_pos": sample["info"]["PN"]["property"][0]["Positive"],
-                        "property_neg": sample["info"]["PN"]["property"][0]["Negative"],
-                        "counting_pos": sample["info"]["PN"]["counting"][0]["Positive"],
-                        "counting_neg": sample["info"]["PN"]["counting"][0]["Negative"],
-                        "spatial_pos": sample["info"]["PN"]["spatial"][0]["Positive"],
-                        "spatial_neg": sample["info"]["PN"]["spatial"][0]["Negative"],
+                        **generate_pns(sample['info'], args.neg_type),
                     }
                 ),
                 wds.map_dict(
