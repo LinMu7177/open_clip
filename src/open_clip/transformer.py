@@ -362,7 +362,7 @@ class Transformer(nn.Module):
                 x = checkpoint(r, x, None, None, attn_mask)
             else:
                 # add visible matrix for "attn_mask_layers" layers
-                if attn_mask_layers is not None and attn_mask_layers >= i:
+                if attn_mask_layers is not None and i >= attn_mask_layers:
                     # attn_mask_layers 不为空表示来自 image encoder 的调用，如果 >=i 则表示不用 vm 限制
                     attn_mask = None
                 x = r(x, attn_mask=attn_mask)
