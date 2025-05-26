@@ -221,3 +221,101 @@ def get_visible_matrix_v2(edges_mask, patch_size):
         torch.full_like(visible_matrix, fill_value=-1e9, dtype=torch.float32)  # 不同object，mask为-∞
     )
     return visible_matrix
+
+
+
+### Object Token Attention Mask
+def get_convert_patches(bbox, patch_size, n_patches_row, n_patches_col):
+    """
+    将 bbox 转换为 patch 坐标
+    bbox: [x1, y1, x2, y2] (左上角和右下角坐标)
+    patch_size: 每个 patch 的大小
+    返回：patches: [[patch_x1, patch_y1, patch_x2, patch_y2], ...]
+    """
+    def point_to_patch(x, y, patch_size=32):
+        patch_x = int(x // patch_size)
+        patch_y = int(y // patch_size)
+        return (patch_x, patch_y)
+
+
+    x1, y1, x2, y2 = bbox
+    top_left_patch = point_to_patch(x1, y1, patch_size)
+    bottom_right_patch = point_to_patch(x2, y2, patch_size)
+
+    # 解包输入的 patch 坐标
+    patch_x_min, patch_y_min = top_left_patch
+    patch_x_max, patch_y_max = bottom_right_patch
+
+    patches = []
+    # 遍历边框所跨的所有 patch 索引
+    for px in range(patch_x_min, patch_x_max + 1):
+        for py in range(patch_y_min, patch_y_max + 1):
+            # 二维坐标压缩为一维
+            patches.append(px * n_patches_col + py)
+
+    return patches
+
+def get_object_token_attention_mask(bboxes, image_size, patch_size, obj_token_nums):
+    """
+    生成物体 token 的注意力掩码
+    bboxes: [[x1, y1, x2, y2], ...] (左上角和右下角坐标)
+    patch_size: 每个 patch 的大小
+    image_size: 图像大小 (H, W)
+    返回：attention_mask: (num_patches, num_patches) 的注意力掩码
+    """
+    H, W = image_size
+    n_patches_row = (H + patch_size - 1) // patch_size
+    n_patches_col = (W + patch_size - 1) // patch_size
+
+    # 1. 初始化 vm
+    vm = np.full((1 + obj_token_nums + 1 + n_patches_row * n_patches_col,
+                        1 + obj_token_nums + 1 + n_patches_row * n_patches_col,), 
+                       fill_value=-1e9, dtype=np.float32)
+    np.fill_diagonal(vm, 0)
+    
+    # 2. 计算所有有 obj 的 patch，以及背景 patch
+    all_obj_infos = []
+    all_obj_patches, background_patches = [], []
+    
+    for bbox in bboxes:
+        patches = get_convert_patches(bbox, patch_size, n_patches_row, n_patches_col)
+        all_obj_infos.append(patches)
+        all_obj_patches.extend(patches)
+    background_patches = list(set(range(n_patches_row * n_patches_col)) - set(all_obj_patches))
+
+    # 3. 填充 vm
+    img_patch_start_idx = 1 + obj_token_nums + 1  # 0 是 CLS，1 到 obj_token_nums 是 object token，obj_token_nums + 1 是背景 patch
+    for idx, sub_vm in enumerate(vm):
+        if idx == 0:
+            # CLS token 可以看见所有 patch
+            sub_vm[img_patch_start_idx:] = 0  
+        elif idx <= obj_token_nums:
+            # obj token 只能看到对应 obj 所在的 patch
+            idx_ = idx - 1
+            if idx_ >= len(all_obj_infos):
+                # 图像中的 obj 数量小于 obj_token_nums，也作为背景处理
+                for p_idx in background_patches:
+                    sub_vm[img_patch_start_idx + p_idx] = 0
+            else:
+                for p_idx in all_obj_infos[idx_]:
+                    sub_vm[img_patch_start_idx + p_idx] = 0
+        elif idx == obj_token_nums + 1:
+            # 背景 patch
+            for p_idx in background_patches:
+                sub_vm[img_patch_start_idx + p_idx, 0] = 0
+        else:
+            # 图像 patch
+            sub_vm[img_patch_start_idx:] = 0
+        
+    # 上三角矩阵 复制到下三角矩阵中
+    for i in range(vm.shape[0]):
+        for j in range(i + 1, vm.shape[1]):
+            vm[j, i] = vm[i, j]
+
+    # 4. 转为 tensor
+    attention_mask = torch.tensor(vm, dtype=torch.float32)
+    return attention_mask
+
+
+    
+    
