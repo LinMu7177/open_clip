@@ -570,38 +570,153 @@ def trace_model(model, batch_size=256, device=torch.device('cpu')):
     return model
 
 
+# def resize_pos_embed(state_dict, model, interpolation: str = 'bicubic', antialias: bool = True):
+#     # Rescale the grid of position embeddings when loading from state_dict
+#     old_pos_embed = state_dict.get('visual.positional_embedding', None)
+#     if old_pos_embed is None or not hasattr(model.visual, 'grid_size'):
+#         return
+#     grid_size = to_2tuple(model.visual.grid_size)
+#     extra_tokens = 1  # FIXME detect different token configs (ie no class token, or more)
+#     new_seq_len = grid_size[0] * grid_size[1] + extra_tokens
+#     if new_seq_len == old_pos_embed.shape[0]:
+#         return
+
+#     if extra_tokens:
+#         pos_emb_tok, pos_emb_img = old_pos_embed[:extra_tokens], old_pos_embed[extra_tokens:]
+#     else:
+#         pos_emb_tok, pos_emb_img = None, old_pos_embed
+#     old_grid_size = to_2tuple(int(math.sqrt(len(pos_emb_img))))
+
+#     logging.info('Resizing position embedding grid-size from %s to %s', old_grid_size, grid_size)
+#     pos_emb_img = pos_emb_img.reshape(1, old_grid_size[0], old_grid_size[1], -1).permute(0, 3, 1, 2)
+#     pos_emb_img = F.interpolate(
+#         pos_emb_img,
+#         size=grid_size,
+#         mode=interpolation,
+#         antialias=antialias,
+#         align_corners=False,
+#     )
+#     pos_emb_img = pos_emb_img.permute(0, 2, 3, 1).reshape(1, grid_size[0] * grid_size[1], -1)[0]
+#     if pos_emb_tok is not None:
+#         new_pos_embed = torch.cat([pos_emb_tok, pos_emb_img], dim=0)
+#     else:
+#         new_pos_embed = pos_emb_img
+#     state_dict['visual.positional_embedding'] = new_pos_embed
+
+# 修改后的 resize_pos_embed 函数
 def resize_pos_embed(state_dict, model, interpolation: str = 'bicubic', antialias: bool = True):
     # Rescale the grid of position embeddings when loading from state_dict
     old_pos_embed = state_dict.get('visual.positional_embedding', None)
     if old_pos_embed is None or not hasattr(model.visual, 'grid_size'):
         return
+
+    # 获取当前模型中期望的位置编码长度和维度
+    # 注意：这里的 extra_tokens_in_model 应该包含 CLS token, obj_tokens 和 background_token
+    obj_token_nums = getattr(model.visual, 'obj_token_nums', 0) # 从模型获取 obj_token_nums
+    background_token_nums = getattr(model.visual, 'background_token_nums', 0) # # 从模型获取 background_token_nums
+    
+    # 额外 token 的总数量 = 1 (CLS) + num_obj_tokens + (1 if has_background_token else 0)
+    extra_tokens_in_model = 1 + obj_token_nums + background_token_nums
+    
     grid_size = to_2tuple(model.visual.grid_size)
-    extra_tokens = 1  # FIXME detect different token configs (ie no class token, or more)
-    new_seq_len = grid_size[0] * grid_size[1] + extra_tokens
-    if new_seq_len == old_pos_embed.shape[0]:
+    new_num_patch_tokens = grid_size[0] * grid_size[1]
+    new_seq_len = new_num_patch_tokens + extra_tokens_in_model
+
+    # 获取预训练模型中的额外 token 数量。
+    # 假设预训练模型中只有 1 个 CLS token，没有 obj_tokens 和 background_token。
+    extra_tokens_in_pretrained = 1 
+
+    # 如果 old_pos_embed 的长度和我们预期的新长度一致，则直接返回
+    if old_pos_embed.shape[0] == new_seq_len:
         return
 
-    if extra_tokens:
-        pos_emb_tok, pos_emb_img = old_pos_embed[:extra_tokens], old_pos_embed[extra_tokens:]
-    else:
-        pos_emb_tok, pos_emb_img = None, old_pos_embed
-    old_grid_size = to_2tuple(int(math.sqrt(len(pos_emb_img))))
+    # 分离预训练位置编码中的 CLS token 和图像 Patch 部分
+    # 假设预训练模型的 CLS token 在索引 0
+    pos_emb_tok_pretrained = old_pos_embed[:extra_tokens_in_pretrained] # 预训练的 CLS token (1个)
+    pos_emb_img_pretrained = old_pos_embed[extra_tokens_in_pretrained:] # 预训练的 Patch tokens
 
-    logging.info('Resizing position embedding grid-size from %s to %s', old_grid_size, grid_size)
-    pos_emb_img = pos_emb_img.reshape(1, old_grid_size[0], old_grid_size[1], -1).permute(0, 3, 1, 2)
-    pos_emb_img = F.interpolate(
-        pos_emb_img,
+    # 重新计算旧的 grid_size，基于预训练的 Patch token 数量
+    old_num_patch_tokens_pretrained = pos_emb_img_pretrained.shape[0]
+    old_grid_size = to_2tuple(int(math.sqrt(old_num_patch_tokens_pretrained)))
+    
+    # 获取 embedding dimension (例如 768)
+    embed_dim = old_pos_embed.shape[1]
+
+    # 检查是否能从预训练 Patch tokens 推断出合理的 old_grid_size
+    if old_grid_size[0] * old_grid_size[1] != old_num_patch_tokens_pretrained:
+        logging.warning(
+            'Cannot infer old_grid_size from pretrained patch tokens. '
+            'old_num_patch_tokens_pretrained = %s, old_grid_size = %s. '
+            'Falling back to simpler positional embedding adjustment. This might lead to suboptimal results for patches.',
+            old_num_patch_tokens_pretrained, old_grid_size
+        )
+        
+        new_pos_embed_final = torch.zeros((new_seq_len, embed_dim))
+
+        # 1. 复制预训练的 CLS token
+        new_pos_embed_final[0] = pos_emb_tok_pretrained[0]
+
+        # 2. 初始化新增的 obj_tokens (如果有的话)
+        if obj_token_nums > 0:
+            nn.init.normal_(new_pos_embed_final[1 : 1 + obj_token_nums], mean=0.0, std=0.02)
+            logging.info(f"Initialized {obj_token_nums} new object token embeddings.")
+
+        # 3. 初始化新增的 background_token (如果有的话)
+        if background_token_nums > 0:
+            # 背景 token 位于 CLS 和 Obj tokens 之后
+            bg_token_idx = 1 + obj_token_nums
+            nn.init.normal_(new_pos_embed_final[bg_token_idx : bg_token_idx + background_token_nums], mean=0.0, std=0.02)
+            logging.info("Initialized new background token embedding.")
+
+        # 4. 复制预训练的 patch tokens 到新位置
+        # 从新模型的 patch tokens 开始索引处开始复制
+        start_idx_current_patches = extra_tokens_in_model
+        
+        num_patches_to_copy = min(old_num_patch_tokens_pretrained, new_num_patch_tokens)
+        new_pos_embed_final[start_idx_current_patches : start_idx_current_patches + num_patches_to_copy] = \
+            pos_emb_img_pretrained[:num_patches_to_copy]
+        logging.info(f"Copied {num_patches_to_copy} existing patch token embeddings without interpolation.")
+
+        # 5. 初始化剩余的新 patch tokens (如果有的话)
+        if new_num_patch_tokens > num_patches_to_copy:
+            nn.init.normal_(new_pos_embed_final[start_idx_current_patches + num_patches_to_copy : new_seq_len], mean=0.0, std=0.02)
+            logging.info(f"Initialized {new_num_patch_tokens - num_patches_to_copy} new patch token embeddings.")
+
+        state_dict['visual.positional_embedding'] = new_pos_embed_final
+        return 
+
+    # 如果可以推断出旧的 grid_size，则进行插值
+    logging.info('Resizing position embedding grid-size from %s to %s for patches', old_grid_size, grid_size)
+    
+    # 将预训练的 Patch Tokens 重新塑形为 2D 网格，并进行插值
+    pos_emb_img_pretrained = pos_emb_img_pretrained.reshape(1, old_grid_size[0], old_grid_size[1], -1).permute(0, 3, 1, 2)
+    pos_emb_img_interp = F.interpolate(
+        pos_emb_img_pretrained,
         size=grid_size,
         mode=interpolation,
         antialias=antialias,
         align_corners=False,
     )
-    pos_emb_img = pos_emb_img.permute(0, 2, 3, 1).reshape(1, grid_size[0] * grid_size[1], -1)[0]
-    if pos_emb_tok is not None:
-        new_pos_embed = torch.cat([pos_emb_tok, pos_emb_img], dim=0)
-    else:
-        new_pos_embed = pos_emb_img
-    state_dict['visual.positional_embedding'] = new_pos_embed
+    pos_emb_img_interp = pos_emb_img_interp.permute(0, 2, 3, 1).reshape(1, new_num_patch_tokens, -1)[0]
+
+    # 构建最终新的 positional_embedding
+    new_pos_embed_final = torch.zeros((new_seq_len, embed_dim))
+    new_pos_embed_final[0] = pos_emb_tok_pretrained[0] # 复制 CLS token
+
+    if obj_token_nums > 0:
+        nn.init.normal_(new_pos_embed_final[1 : 1 + obj_token_nums], mean=0.0, std=0.02)
+        logging.info(f"Initialized {obj_token_nums} new object token embeddings.")
+
+    if background_token_nums > 0:
+        bg_token_idx = 1 + obj_token_nums
+        nn.init.normal_(new_pos_embed_final[bg_token_idx : bg_token_idx + background_token_nums], mean=0.0, std=0.02)
+        logging.info("Initialized new background token embedding.")
+
+    # 插入插值后的 Patch Tokens
+    new_pos_embed_final[extra_tokens_in_model : extra_tokens_in_model + new_num_patch_tokens] = pos_emb_img_interp
+    
+    state_dict['visual.positional_embedding'] = new_pos_embed_final
+    logging.info(f"Successfully interpolated patch embeddings to {grid_size} and added obj/background tokens.")
 
 
 def resize_text_pos_embed(state_dict, model, interpolation: str = 'linear', antialias: bool = False):

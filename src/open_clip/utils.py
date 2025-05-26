@@ -255,7 +255,7 @@ def get_convert_patches(bbox, patch_size, n_patches_row, n_patches_col):
 
     return patches
 
-def get_object_token_attention_mask(bboxes, image_size, patch_size, obj_token_nums):
+def get_object_token_attention_mask(bboxes=None, image_size=None, patch_size=None, obj_token_nums=10):
     """
     生成物体 token 的注意力掩码
     bboxes: [[x1, y1, x2, y2], ...] (左上角和右下角坐标)
@@ -273,6 +273,11 @@ def get_object_token_attention_mask(bboxes, image_size, patch_size, obj_token_nu
                        fill_value=-1e9, dtype=np.float32)
     np.fill_diagonal(vm, 0)
     
+    # TODO
+    if bboxes is None:
+        return torch.tensor(vm, dtype=torch.float32)
+
+
     # 2. 计算所有有 obj 的 patch，以及背景 patch
     all_obj_infos = []
     all_obj_patches, background_patches = [], []

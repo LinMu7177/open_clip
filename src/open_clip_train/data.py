@@ -34,7 +34,7 @@ import torchvision.transforms.functional as F
 from open_clip_train.svlc_learning.negs_and_pos import Negatives,NegativesLLM, ChunkSample,BothNegatives
 from open_clip_train.svlc_learning.pns_generater import generate_pns
 
-from open_clip.utils import get_visible_matrix_v2
+from open_clip.utils import get_visible_matrix_v2, get_object_token_attention_mask
 from open_clip.factory import get_model_config
 
 from torch import Tensor
@@ -512,10 +512,11 @@ def get_objects_sense(sample, objects_sense_format):
 
 
 def get_visible_matrix(sample, patch_size):
-    edges_mask_tensor = sample['objects_sense'].squeeze(0)  # (1, H, W) -> (H, W)
-    edges_mask = edges_mask_tensor.cpu().detach().numpy()
+    # edges_mask_tensor = sample['objects_sense'].squeeze(0)  # (1, H, W) -> (H, W)
+    # edges_mask = edges_mask_tensor.cpu().detach().numpy()
     
-    vm = get_visible_matrix_v2(edges_mask, patch_size)
+    # vm = get_visible_matrix_v2(edges_mask, patch_size)
+    vm = get_object_token_attention_mask(image_size=sample['image'].size, patch_size=patch_size)
     return vm
 
 

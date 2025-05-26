@@ -313,8 +313,17 @@ class CustomResidualAttentionBlock(nn.Module):
         return x
 
 
-def _expand_token(token, batch_size: int):
-    return token.view(1, 1, -1).expand(batch_size, -1, -1)
+def _expand_token(token_tensor, batch_size: int):
+    # token_tensor 可以是单个 token (width,) 或多个 token (num_tokens, width)
+    # 如果是单个 token，则 view(1, 1, -1) 变成 (1, 1, width)
+    # 如果是多个 token，则 view(1, num_tokens, -1) 变成 (1, num_tokens, width)
+    # 然后 expand 到 batch_size
+    if token_tensor.dim() == 1: # Single token, e.g., class_embedding
+        return token_tensor.view(1, 1, -1).expand(batch_size, -1, -1)
+    elif token_tensor.dim() == 2: # Multiple tokens, e.g., obj_tokens
+        return token_tensor.view(1, token_tensor.shape[0], -1).expand(batch_size, -1, -1)
+    else:
+        raise ValueError("Unsupported token dimension for _expand_token")
 
 
 class Transformer(nn.Module):
@@ -477,22 +486,29 @@ class VisionTransformer(nn.Module):
         # save num_heads
         self.num_heads = heads
 
+        self.obj_token_nums = 10
+        self.background_token_nums = 1
+
         # class embeddings and positional embeddings
         scale = width ** -0.5
         self.class_embedding = nn.Parameter(scale * torch.randn(width))
         if pos_embed_type == 'learnable':
             self.positional_embedding = nn.Parameter(
-                scale * torch.randn(self.grid_size[0] * self.grid_size[1] + 1, width))
+                scale * torch.randn(self.grid_size[0] * self.grid_size[1] + 1 + self.obj_token_nums + self.background_token_nums, width))
         elif pos_embed_type == 'sin_cos_2d':
             # fixed sin-cos embedding
             assert self.grid_size[0] == self.grid_size[1],\
                 'currently sin cos 2d pos embedding only supports square input'
             self.positional_embedding = nn.Parameter(
-                torch.zeros(self.grid_size[0] * self.grid_size[1] + 1, width), requires_grad=False)
+                torch.zeros(self.grid_size[0] * self.grid_size[1] + 1 + self.obj_token_nums + self.background_token_nums, width), requires_grad=False)
             pos_embed_type = get_2d_sincos_pos_embed(width, self.grid_size[0], cls_token=True)
             self.positional_embedding.data.copy_(torch.from_numpy(pos_embed_type).float())
         else:
             raise ValueError
+
+        # add object embeddings
+        self.object_embedding = nn.Parameter(scale * torch.randn(self.obj_token_nums, width))
+        self.background_embedding = nn.Parameter(scale * torch.randn(width))
 
         # setting a patch_dropout of 0. would mean it is disabled and this function would be the identity fn
         self.patch_dropout = PatchDropout(patch_dropout) if patch_dropout > 0. else nn.Identity()
@@ -629,9 +645,15 @@ class VisionTransformer(nn.Module):
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
 
-        # class embeddings and positional embeddings
+        # class embeddings
         x = torch.cat([_expand_token(self.class_embedding, x.shape[0]).to(x.dtype), x], dim=1)
+        # object embeddings and background embedding
+        if hasattr(self, 'object_embedding'):
+            object_tokens = _expand_token(self.object_embedding, x.shape[0])
+            background_tokens = _expand_token(self.background_embedding, x.shape[0])
+            x = torch.cat([object_tokens, background_tokens, x], dim=1)
         # shape = [*, grid ** 2 + 1, width]
+        # positional embeddings
         x = x + self.positional_embedding.to(x.dtype)
 
         x = self.patch_dropout(x)
