@@ -528,6 +528,8 @@ def parse_args(args):
     parser.add_argument("--use_visible_matrix", default=False, action="store_true", help="use visible matrix")
     parser.add_argument("--visible_matrix_layers", default=3, type=int, help="use visible matrix layers")
 
+    parser.add_argument("--use_obj_tokens", default=False, action="store_true", help="use visible matrix")
+
     args = parser.parse_args(args)
 
     if 'timm' not in args.opt:

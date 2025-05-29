@@ -617,6 +617,22 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
             )
             tuple_keys.append("visible_matrix")
 
+    if args.use_obj_tokens:
+        def add_visible_matrix(sample):
+            sample["visible_matrix"] = get_object_token_attention_mask(
+                bboxes=sample['info']['merged_bboxes']['<OD>']['bboxes'],
+                image_size=sample['image'].size, 
+                patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"]
+            )
+            return sample
+        
+        pipeline.extend(
+            [
+                wds.map(add_visible_matrix),
+            ]
+        )
+        tuple_keys.append("visible_matrix")
+
     if args.vl_negs:
         pipeline.extend(
             [
