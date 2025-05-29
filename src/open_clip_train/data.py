@@ -512,11 +512,11 @@ def get_objects_sense(sample, objects_sense_format):
 
 
 def get_visible_matrix(sample, patch_size):
-    # edges_mask_tensor = sample['objects_sense'].squeeze(0)  # (1, H, W) -> (H, W)
-    # edges_mask = edges_mask_tensor.cpu().detach().numpy()
+    edges_mask_tensor = sample['objects_sense'].squeeze(0)  # (1, H, W) -> (H, W)
+    edges_mask = edges_mask_tensor.cpu().detach().numpy()
     
-    # vm = get_visible_matrix_v2(edges_mask, patch_size)
-    vm = get_object_token_attention_mask(image_size=sample['image'].size, patch_size=patch_size)
+    vm = get_visible_matrix_v2(edges_mask, patch_size)
+    # vm = get_object_token_attention_mask(image_size=sample['image'].size, patch_size=patch_size)
     return vm
 
 
@@ -619,11 +619,23 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
 
     if args.use_obj_tokens:
         def add_visible_matrix(sample):
-            sample["visible_matrix"] = get_object_token_attention_mask(
+            mask = get_object_token_attention_mask(
                 bboxes=sample['info']['merged_bboxes']['<OD>']['bboxes'],
-                image_size=sample['image'].size, 
+                image_original_size=sample['image'].size, 
+                image_resize_size=preprocess_img.transforms[0].size,
                 patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"]
             )
+
+            if args.use_visible_matrix:
+                mask_vm = get_object_token_attention_mask(
+                    bboxes=sample['info']['merged_bboxes']['<OD>']['bboxes'],
+                    image_original_size=sample['image'].size, 
+                    image_resize_size=preprocess_img.transforms[0].size,
+                    patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"],
+                    use_vm=True
+                )
+                mask = torch.stack([mask, mask_vm], dim=0)  # (2, H, W)
+            sample['visible_matrix'] = mask
             return sample
         
         pipeline.extend(

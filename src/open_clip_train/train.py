@@ -117,6 +117,10 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
             objects_sense = batch[2].to(device=device, non_blocking=True)
             if args.use_visible_matrix:
                 visible_matrix = batch[3].to(device=device, non_blocking=True)
+
+        if args.use_obj_tokens:
+            visible_matrix = batch[2].to(device=device, non_blocking=True)
+
         if args.vl_negs:
             start_idx = 2 + (1 if args.objects_sense_format else 0) + (1 if args.use_visible_matrix else 0)
             

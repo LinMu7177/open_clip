@@ -370,11 +370,28 @@ class Transformer(nn.Module):
                 # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
                 x = checkpoint(r, x, None, None, attn_mask)
             else:
-                # add visible matrix for "attn_mask_layers" layers
-                if attn_mask_layers is not None and i >= attn_mask_layers:
-                    # attn_mask_layers 不为空表示来自 image encoder 的调用，如果 >=i 则表示不用 vm 限制
-                    attn_mask = None
-                x = r(x, attn_mask=attn_mask)
+                if len(attn_mask.size()) == 4:
+                    mask, mask_vm = torch.split(attn_mask, 1, dim=1)
+                    mask = mask.squeeze(1)  # (B, 1, L, S) -> (B, L, S)
+                    mask_vm = mask_vm.squeeze(1)  # (B, 1, L, S) -> (B, L, S)
+                else:
+                    mask, mask_vm = attn_mask, attn_mask
+                
+                if attn_mask_layers is not None:
+                    # attn_mask_layers 不为空表示来自 image encoder 的调用
+                    if i < attn_mask_layers:
+                        # 如果 i < attn_mask_layers 则表示需要 vm 限制
+                        x = r(x, attn_mask=mask_vm)
+                    else:
+                        # 如果 i >= attn_mask_layers 则表示不用 vm 限制
+                        x = r(x, attn_mask=mask)
+                else:
+                    x = r(x, attn_mask=None)    
+                # # add visible matrix for "attn_mask_layers" layers
+                # if attn_mask_layers is not None and i >= attn_mask_layers:
+                #     # attn_mask_layers 不为空表示来自 image encoder 的调用，如果 >=i 则表示不用 vm 限制
+                #     attn_mask = None
+                # x = r(x, attn_mask=attn_mask)
         if not self.batch_first:
             x = x.transpose(0, 1)    # LND -> NLD
         return x
@@ -663,7 +680,11 @@ class VisionTransformer(nn.Module):
         # (B, L, S) -> (B * num_heads, L, S)
         attn_mask = None
         if visible_matrix is not None:
-            attn_mask = visible_matrix.repeat(self.num_heads, 1, 1)
+            if len(visible_matrix.size()) == 3:
+                attn_mask = visible_matrix.repeat(self.num_heads, 1, 1)
+            elif len(visible_matrix.size()) == 4:
+                # (B, 2, L, S) -> (B * num_heads, 2, L, S)
+                attn_mask = visible_matrix.repeat(self.num_heads, 1, 1, 1)
 
         x = self.transformer(x, attn_mask=attn_mask, attn_mask_layers=visible_matrix_layers)
 

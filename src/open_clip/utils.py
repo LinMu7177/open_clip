@@ -255,15 +255,16 @@ def get_convert_patches(bbox, patch_size, n_patches_row, n_patches_col):
 
     return patches
 
-def get_object_token_attention_mask(bboxes=None, image_size=None, patch_size=None, obj_token_nums=10):
+def get_object_token_attention_mask(bboxes, image_original_size, image_resize_size, patch_size=32, obj_token_nums=10, background_token_nums=1, use_vm=False):
     """
-    生成物体 token 的注意力掩码
-    bboxes: [[x1, y1, x2, y2], ...] (左上角和右下角坐标)
-    patch_size: 每个 patch 的大小
-    image_size: 图像大小 (H, W)
-    返回：attention_mask: (num_patches, num_patches) 的注意力掩码
+    给定 bbox 和 patch 大小，返回 bbox 覆盖的所有 patch 的索引
     """
-    H, W = image_size
+    H, W = image_resize_size
+    H_old, W_old = image_original_size
+
+    scale_w = W / W_old
+    scale_h = H / H_old
+
     n_patches_row = (H + patch_size - 1) // patch_size
     n_patches_col = (W + patch_size - 1) // patch_size
 
@@ -273,23 +274,25 @@ def get_object_token_attention_mask(bboxes=None, image_size=None, patch_size=Non
                        fill_value=-1e9, dtype=np.float32)
     np.fill_diagonal(vm, 0)
     
-    # TODO
-    if bboxes is None:
-        return torch.tensor(vm, dtype=torch.float32)
-
-
     # 2. 计算所有有 obj 的 patch，以及背景 patch
     all_obj_infos = []
     all_obj_patches, background_patches = [], []
     
-    for bbox in bboxes:
-        patches = get_convert_patches(bbox, patch_size, n_patches_row, n_patches_col)
-        all_obj_infos.append(patches)
+    for idx, bbox in enumerate(bboxes):
+        # 对于 bbox 中的每个元素 resize
+        bbox_resized = [bbox[0] * scale_w, bbox[1] * scale_h, bbox[2] * scale_w, bbox[3] * scale_h]
+
+        patches = get_convert_patches(bbox_resized, patch_size, n_patches_row, n_patches_col)
+        all_obj_infos.append({
+            'obj_id': idx,
+            'patches': patches,
+            'size': (bbox[2] - bbox[0]) *  (bbox[3] - bbox[1]),
+        })
         all_obj_patches.extend(patches)
     background_patches = list(set(range(n_patches_row * n_patches_col)) - set(all_obj_patches))
 
     # 3. 填充 vm
-    img_patch_start_idx = 1 + obj_token_nums + 1  # 0 是 CLS，1 到 obj_token_nums 是 object token，obj_token_nums + 1 是背景 patch
+    img_patch_start_idx = 1 + obj_token_nums + background_token_nums
     for idx, sub_vm in enumerate(vm):
         if idx == 0:
             # CLS token 可以看见所有 patch
@@ -302,20 +305,41 @@ def get_object_token_attention_mask(bboxes=None, image_size=None, patch_size=Non
                 for p_idx in background_patches:
                     sub_vm[img_patch_start_idx + p_idx] = 0
             else:
-                for p_idx in all_obj_infos[idx_]:
+                for p_idx in all_obj_infos[idx_]['patches']:
                     sub_vm[img_patch_start_idx + p_idx] = 0
-        elif idx == obj_token_nums + 1:
+        elif idx <= obj_token_nums + background_token_nums:
             # 背景 patch
             for p_idx in background_patches:
-                sub_vm[img_patch_start_idx + p_idx, 0] = 0
+                sub_vm[img_patch_start_idx + p_idx] = 0
         else:
             # 图像 patch
-            sub_vm[img_patch_start_idx:] = 0
-        
-    # 上三角矩阵 复制到下三角矩阵中
-    for i in range(vm.shape[0]):
-        for j in range(i + 1, vm.shape[1]):
-            vm[j, i] = vm[i, j]
+            idx_ = idx - (1 + obj_token_nums + background_token_nums)
+            # CLS 可以看见
+            sub_vm[0] = 0
+            # 可以看见的 object token
+            smallest_obj_id, smamllest_size = -1, float('inf')
+            for obj_info in all_obj_infos:
+                if idx_ in obj_info['patches']:
+                    # 该 patch 属于某个 obj
+                    sub_vm[1 + obj_info['obj_id']] = 0
+                    # 记录最小的 obj
+                    if obj_info['size'] < smamllest_size:
+                        smallest_obj_id, smamllest_size = obj_info['obj_id'], obj_info['size']
+            
+            # 如果不属于任何一个 obj，与 background token 交互
+            if smallest_obj_id == -1:
+                for p_idx in range(len(all_obj_infos) + 1, 1 + obj_token_nums + background_token_nums):
+                    sub_vm[1 + p_idx] = 0
+            
+            # 使用 image patch vm
+            if use_vm:
+                # 如果使用 vm，则只保留最小的 obj 的 patch
+                if smallest_obj_id != -1:
+                    for p_idx in all_obj_infos[smallest_obj_id]['patches']:
+                        sub_vm[img_patch_start_idx + p_idx] = 0
+            else:
+                # 如果不使用 vm，则将所有 patch 都置为 0
+                sub_vm[img_patch_start_idx:] = 0
 
     # 4. 转为 tensor
     attention_mask = torch.tensor(vm, dtype=torch.float32)
