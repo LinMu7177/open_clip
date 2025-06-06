@@ -120,6 +120,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
 
         if args.use_obj_tokens:
             visible_matrix = batch[2].to(device=device, non_blocking=True)
+            obj_texts, obj_texts_mask = batch[3].to(device=device, non_blocking=True), batch[4].to(device=device, non_blocking=True)
 
         if args.vl_negs:
             start_idx = 2 + (1 if args.objects_sense_format else 0) + (1 if args.use_visible_matrix else 0)
@@ -139,6 +140,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                 model_out = model(
                             image=images,
                             text=texts,
+                            obj_texts=obj_texts if args.use_obj_tokens else None,
                             objects_sense=objects_sense,
                             visible_matrix=visible_matrix,
                             visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
@@ -156,9 +158,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
                 # losses = loss(**model_out, output_dict=True)
                 losses = {}
-                total_loss, contrastive_loss, neg_loss, property_loss, counting_loss, spatial_loss = loss(
+                total_loss, contrastive_loss, obj_contrative_loss, neg_loss, property_loss, counting_loss, spatial_loss = loss(
                     model_out["image_features"],
                     model_out["text_features"],
+                    model_out["obj_image_features"],
+                    model_out["obj_text_features"],
+                    obj_texts_mask,
                     model_out["logit_scale"],
                     model_out["property_pos_features"],
                     model_out["property_neg_features"],
@@ -174,6 +179,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                 losses["property_loss"] = property_loss
                 losses["counting_loss"] = counting_loss
                 losses["spatial_loss"] = spatial_loss
+                losses["obj_contrative_loss"] = obj_contrative_loss
 
             backward(total_loss, scaler)
         else:

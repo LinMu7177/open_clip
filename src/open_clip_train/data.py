@@ -637,13 +637,37 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
                 mask = torch.stack([mask, mask_vm], dim=0)  # (2, H, W)
             sample['visible_matrix'] = mask
             return sample
+
+        def add_obj_texts(sample):
+            # add object tokens to the text
+            obj_texts = sample['info']['merged_bboxes']['<OD>']['caption'] 
+            obj_texts_padding = obj_texts + [''] * (args.obj_token_nums - len(obj_texts))
+
+            obj_texts_mask = [0] * args.obj_token_nums
+
+            # 如果存在相同的 caption，则只保留一个
+            distinct_set = set()
+            for i in range(len(obj_texts)):
+                if obj_texts[i] not in distinct_set:
+                    distinct_set.add(obj_texts[i])
+                    obj_texts_mask[i] = 1
+            
+            obj_texts_mask = torch.tensor(
+                obj_texts_mask,
+                dtype=torch.bool
+            )
+
+            sample['obj_texts'] = tokenizer(obj_texts_padding)
+            sample['obj_texts_mask'] = obj_texts_mask
+            return sample
         
         pipeline.extend(
             [
                 wds.map(add_visible_matrix),
+                wds.map(add_obj_texts),
             ]
         )
-        tuple_keys.append("visible_matrix")
+        tuple_keys.extend(["visible_matrix", "obj_texts", "obj_texts_mask"])
 
     if args.vl_negs:
         pipeline.extend(

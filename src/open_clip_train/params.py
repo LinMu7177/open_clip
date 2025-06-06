@@ -529,6 +529,7 @@ def parse_args(args):
     parser.add_argument("--visible_matrix_layers", default=3, type=int, help="use visible matrix layers")
 
     parser.add_argument("--use_obj_tokens", default=False, action="store_true", help="use visible matrix")
+    parser.add_argument("--obj_token_nums", default=10, type=int, help="number of object tokens")
 
     args = parser.parse_args(args)
 

@@ -276,8 +276,8 @@ class CLIP(nn.Module):
         return no_wd
 
     def encode_image(self, image, object_sense=None, visible_matrix=None, visible_matrix_layers=None, normalize: bool = False):
-        features = self.visual(image, object_sense, visible_matrix, visible_matrix_layers)
-        return F.normalize(features, dim=-1) if normalize else features
+        features, obj_image_features = self.visual(image, object_sense, visible_matrix, visible_matrix_layers)
+        return F.normalize(features, dim=-1) if normalize else features, F.normalize(obj_image_features, dim=-1) if normalize else obj_image_features
 
     def encode_text(self, text, normalize: bool = False):
         cast_dtype = self.transformer.get_cast_dtype()
@@ -309,6 +309,7 @@ class CLIP(nn.Module):
             self,
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
+            obj_texts: Optional[torch.Tensor] = None,
             objects_sense: Optional[torch.Tensor] = None,
             visible_matrix: Optional[torch.Tensor] = None,
             visible_matrix_layers: Optional[int] = None,
@@ -319,7 +320,7 @@ class CLIP(nn.Module):
             spatial_pos: Optional[torch.Tensor] = None,
             spatial_neg: Optional[torch.Tensor] = None
     ):
-        image_features = self.encode_image(image, objects_sense, visible_matrix, visible_matrix_layers, normalize=True) if image is not None else None
+        image_features, obj_image_features = self.encode_image(image, objects_sense, visible_matrix, visible_matrix_layers, normalize=True) if image is not None else None
         text_features = self.encode_text(text, normalize=True) if text is not None else None
 
         property_pos_features = self.encode_text(property_pos, normalize=True) if property_pos is not None else None
@@ -329,10 +330,26 @@ class CLIP(nn.Module):
         spatial_pos_features = self.encode_text(spatial_pos, normalize=True) if spatial_pos is not None else None
         spatial_neg_features = self.encode_text(spatial_neg, normalize=True) if spatial_neg is not None else None
 
+        obj_text_features = None
+        if obj_texts is not None:
+            # 输入形状: [batch_size, num_texts, seq_len] = [512, 10, 77]
+            batch_size, num_texts, seq_len = obj_texts.shape
+
+            # 将 num_texts 维度合并到 batch 维度
+            obj_texts = obj_texts.view(batch_size * num_texts, seq_len)  # [512*10, 77]
+
+            # 编码文本特征
+            obj_text_features = self.encode_text(obj_texts, normalize=True)  # 假设输出 [512*10, D]
+
+            # 恢复原形状用于后续对比计算
+            obj_text_features = obj_text_features.view(batch_size, num_texts, -1)  # [512, 10, D]
+
         if self.output_dict:
             out_dict = {
                 "image_features": image_features,
                 "text_features": text_features,
+                "obj_image_features": obj_image_features,
+                "obj_text_features": obj_text_features,
                 "property_pos_features": property_pos_features,
                 "property_neg_features": property_neg_features,
                 "counting_pos_features": counting_pos_features,

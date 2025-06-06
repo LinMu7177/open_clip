@@ -713,6 +713,12 @@ class VisionTransformer(nn.Module):
         if self.proj is not None:
             pooled = pooled @ self.proj
 
+        if self.obj_token_nums is not None:
+            object_token_outputs = tokens[:,:self.obj_token_nums]
+            object_token_outputs = object_token_outputs @ self.proj # shape: [B, nums_obj_tokens, proj_dim]
+            return pooled, object_token_outputs
+
+
         if self.output_tokens:
             return pooled, tokens
         
