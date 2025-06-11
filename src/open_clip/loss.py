@@ -149,7 +149,7 @@ class ClipLoss(nn.Module):
             total_loss = total_loss + neg_loss
         
         if self.args.use_obj_tokens:
-            obj_contrastive_loss = self.get_obj_contrastive_loss(
+            obj_contrastive_loss = get_obj_contrastive_loss(
                 obj_image_features, obj_text_features, logit_scale, obj_text_mask
             )
             total_loss = total_loss + obj_contrastive_loss
@@ -233,72 +233,72 @@ class ClipLoss(nn.Module):
 
         return total_loss
 
-    def get_obj_contrastive_loss(self, obj_image_features, obj_text_features, logit_scale, obj_mask):
-        """
-        计算对象级别的对比学习损失，并支持掩码过滤。
+def get_obj_contrastive_loss(obj_image_features, obj_text_features, logit_scale, obj_mask):
+    """
+    计算对象级别的对比学习损失，并支持掩码过滤。
 
-        Args:
-            obj_image_features (torch.Tensor): 视觉对象特征，形状 [B, N_obj, D]
-            obj_text_features (torch.Tensor): 文本对象特征，形状 [B, N_obj, D]
-            logit_scale (torch.Tensor or float): 用于缩放 logits 的温度参数倒数
-            obj_mask (torch.Tensor): 布尔型掩码，形状 [B, N_obj]，
-                                    True 表示该位置的对象有效，False 表示无效。
+    Args:
+        obj_image_features (torch.Tensor): 视觉对象特征，形状 [B, N_obj, D]
+        obj_text_features (torch.Tensor): 文本对象特征，形状 [B, N_obj, D]
+        logit_scale (torch.Tensor or float): 用于缩放 logits 的温度参数倒数
+        obj_mask (torch.Tensor): 布尔型掩码，形状 [B, N_obj]，
+                                True 表示该位置的对象有效，False 表示无效。
 
-        Returns:
-            torch.Tensor: 计算得到的对象对比学习损失。
-        """
-        batch_size, num_obj_per_sample, _ = obj_image_features.shape
+    Returns:
+        torch.Tensor: 计算得到的对象对比学习损失。
+    """
+    batch_size, num_obj_per_sample, _ = obj_image_features.shape
 
-        # 1. 计算相似度矩阵
-        # 形状: [B, N_obj, N_obj]
-        # (B, N_obj, D) @ (B, D, N_obj) -> (B, N_obj, N_obj)
-        logits_per_visual_text = logit_scale * (obj_image_features @ obj_text_features.permute(0, 2, 1))
+    # 1. 计算相似度矩阵
+    # 形状: [B, N_obj, N_obj]
+    # (B, N_obj, D) @ (B, D, N_obj) -> (B, N_obj, N_obj)
+    logits_per_visual_text = logit_scale * (obj_image_features @ obj_text_features.permute(0, 2, 1))
 
-        # 2. 构建目标标签 (每个样本内的对角线)
-        # 形状: [B, N_obj]
-        labels = torch.arange(num_obj_per_sample, device=logits_per_visual_text.device).unsqueeze(0).expand(batch_size, -1)
+    # 2. 构建目标标签 (每个样本内的对角线)
+    # 形状: [B, N_obj]
+    labels = torch.arange(num_obj_per_sample, device=logits_per_visual_text.device).unsqueeze(0).expand(batch_size, -1)
 
-        # 3. 展平 logits 和 labels 以适应 F.cross_entropy
-        # 形状: [B * N_obj, N_obj]
-        flat_logits = logits_per_visual_text.view(-1, num_obj_per_sample)
-        # 形状: [B * N_obj]
-        flat_labels = labels.reshape(-1)
+    # 3. 展平 logits 和 labels 以适应 F.cross_entropy
+    # 形状: [B * N_obj, N_obj]
+    flat_logits = logits_per_visual_text.view(-1, num_obj_per_sample)
+    # 形状: [B * N_obj]
+    flat_labels = labels.reshape(-1)
 
-        # 4. 展平掩码
-        # 形状: [B * N_obj]
-        flat_obj_mask = obj_mask.view(-1)
+    # 4. 展平掩码
+    # 形状: [B * N_obj]
+    flat_obj_mask = obj_mask.view(-1)
 
-        # 5. 应用掩码，只选择有效对象的 logits 和 labels
-        # 这些 `valid_` 张量只包含 `obj_mask` 中为 True 的行/元素
-        valid_logits = flat_logits[flat_obj_mask] # 形状: [有效对象总数, N_obj]
-        valid_labels = flat_labels[flat_obj_mask] # 形状: [有效对象总数]
+    # 5. 应用掩码，只选择有效对象的 logits 和 labels
+    # 这些 `valid_` 张量只包含 `obj_mask` 中为 True 的行/元素
+    valid_logits = flat_logits[flat_obj_mask] # 形状: [有效对象总数, N_obj]
+    valid_labels = flat_labels[flat_obj_mask] # 形状: [有效对象总数]
 
-        # 6. 检查是否存在有效对象以避免计算空损失
-        if valid_logits.numel() == 0:
-            # 如果没有有效对象，则损失为 0，避免 NaN
-            return torch.tensor(0.0, device=obj_image_features.device)
+    # 6. 检查是否存在有效对象以避免计算空损失
+    if valid_logits.numel() == 0:
+        # 如果没有有效对象，则损失为 0，避免 NaN
+        return torch.tensor(0.0, device=obj_image_features.device)
 
-        # 7. 计算从视觉到文本的损失
-        loss_visual_text = F.cross_entropy(valid_logits, valid_labels)
+    # 7. 计算从视觉到文本的损失
+    loss_visual_text = F.cross_entropy(valid_logits, valid_labels)
 
-        # 8. 计算从文本到视觉的对称损失
-        # 需要先转置原始 logits_per_visual_text，然后同样应用掩码
-        # [B, N_obj, N_obj] -> [B, N_obj, N_obj]
-        logits_per_text_visual = logits_per_visual_text.permute(0, 2, 1).contiguous()
-        # 展平以便应用掩码
-        flat_logits_T = logits_per_text_visual.view(-1, num_obj_per_sample)
-        
-        # 同样应用掩码过滤，确保只计算有效文本特征对应的损失
-        # 这里的 valid_logits_T 和 valid_labels 长度应该相同
-        valid_logits_T = flat_logits_T[flat_obj_mask]
+    # 8. 计算从文本到视觉的对称损失
+    # 需要先转置原始 logits_per_visual_text，然后同样应用掩码
+    # [B, N_obj, N_obj] -> [B, N_obj, N_obj]
+    logits_per_text_visual = logits_per_visual_text.permute(0, 2, 1).contiguous()
+    # 展平以便应用掩码
+    flat_logits_T = logits_per_text_visual.view(-1, num_obj_per_sample)
+    
+    # 同样应用掩码过滤，确保只计算有效文本特征对应的损失
+    # 这里的 valid_logits_T 和 valid_labels 长度应该相同
+    valid_logits_T = flat_logits_T[flat_obj_mask]
 
-        # 计算对称损失
-        loss_text_visual = F.cross_entropy(valid_logits_T, valid_labels)
+    # 计算对称损失
+    loss_text_visual = F.cross_entropy(valid_logits_T, valid_labels)
 
-        # 9. 计算最终的平均损失
-        object_contrastive_loss = (loss_visual_text + loss_text_visual) / 2
+    # 9. 计算最终的平均损失
+    object_contrastive_loss = (loss_visual_text + loss_text_visual) / 2
 
-        return object_contrastive_loss
+    return object_contrastive_loss
 
 
 

@@ -372,10 +372,15 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                     spatial_pos = batch[start_idx + 4].to(device=device, non_blocking=True)
                     spatial_neg = batch[start_idx + 5].to(device=device, non_blocking=True)
 
+                if args.use_obj_tokens:
+                    visible_matrix = batch[2].to(device=device, non_blocking=True)
+                    obj_texts, obj_texts_mask = batch[3].to(device=device, non_blocking=True), batch[4].to(device=device, non_blocking=True)
+
                 with autocast():
                     model_out = model(
                             image=images,
                             text=texts,
+                            obj_texts=obj_texts if args.use_obj_tokens else None,
                             objects_sense=objects_sense,
                             visible_matrix=visible_matrix,
                             visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
@@ -408,6 +413,14 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
 
                     neg_loss, property_loss, counting_loss, spatial_loss = maybe_compute_neg_loss(args, model_out)
 
+                    from open_clip.loss import get_obj_contrastive_loss
+                    obj_contrative_loss = get_obj_contrastive_loss(
+                        model_out["obj_image_features"],
+                        model_out["obj_text_features"],
+                        logit_scale,
+                        obj_texts_mask,
+                    )
+
                 cumulative_contrastive_loss += contrastive_loss * batch_size
                 cumulative_total_loss += contrastive_loss * batch_size
                 if neg_loss is not None:
@@ -423,6 +436,7 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                     logging.info(
                         f"Eval Epoch: {epoch} [{num_samples} / {samples_per_val}]\t"
                         f"Total Loss: {cumulative_total_loss / num_samples:.6f}, Contrastive Loss: {cumulative_contrastive_loss / num_samples:.6f}\t"
+                        f"Object Contrastive Loss: {obj_contrative_loss / num_samples:.6f}\t"
                         f"Negative Loss: {cumulative_neg_loss / num_samples:.6f}, Property Loss: {cumulative_property_loss / num_samples:.6f}, Counting Loss: {cumulative_counting_loss / num_samples:.6f}, Spatial Loss: {cumulative_spatial_loss / num_samples:.6f}\t" if neg_loss is not None else ""
                         )
 

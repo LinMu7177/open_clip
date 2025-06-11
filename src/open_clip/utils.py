@@ -259,7 +259,10 @@ def get_object_token_attention_mask(bboxes, image_original_size, image_resize_si
     """
     给定 bbox 和 patch 大小，返回 bbox 覆盖的所有 patch 的索引
     """
-    H, W = image_resize_size
+    if isinstance(image_resize_size, int):
+        H, W = image_resize_size, image_resize_size
+    else:
+        H, W = image_resize_size
     H_old, W_old = image_original_size
 
     scale_w = W / W_old
