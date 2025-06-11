@@ -341,6 +341,7 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
         # all_image_features @ all_text_features will blow up memory and compute very quickly
         cumulative_total_loss = torch.zeros(()).to(device)
         cumulative_contrastive_loss = torch.zeros(()).to(device)
+        cumulative_obj_contrastive_loss = torch.zeros(()).to(device)
         cumulative_gen_loss = torch.zeros(()).to(device)
         cumulative_neg_loss = torch.zeros(()).to(device)
         cumulative_property_loss = torch.zeros(()).to(device)
@@ -414,7 +415,7 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                     neg_loss, property_loss, counting_loss, spatial_loss = maybe_compute_neg_loss(args, model_out)
 
                     from open_clip.loss import get_obj_contrastive_loss
-                    obj_contrative_loss = get_obj_contrastive_loss(
+                    obj_contrastive_loss = get_obj_contrastive_loss(
                         model_out["obj_image_features"],
                         model_out["obj_text_features"],
                         logit_scale,
@@ -430,15 +431,20 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                     cumulative_spatial_loss += spatial_loss * batch_size
                     # add neg loss to total loss
                     cumulative_total_loss += neg_loss * batch_size
+
+                if obj_contrastive_loss is not None:
+                    cumulative_obj_contrastive_loss += obj_contrastive_loss * batch_size
+                    cumulative_total_loss += obj_contrastive_loss * batch_size
         
                 num_samples += batch_size 
                 if is_master(args) and (i % 100) == 0:
                     logging.info(
                         f"Eval Epoch: {epoch} [{num_samples} / {samples_per_val}]\t"
                         f"Total Loss: {cumulative_total_loss / num_samples:.6f}, Contrastive Loss: {cumulative_contrastive_loss / num_samples:.6f}\t"
-                        f"Object Contrastive Loss: {obj_contrative_loss / num_samples:.6f}\t"
-                        f"Negative Loss: {cumulative_neg_loss / num_samples:.6f}, Property Loss: {cumulative_property_loss / num_samples:.6f}, Counting Loss: {cumulative_counting_loss / num_samples:.6f}, Spatial Loss: {cumulative_spatial_loss / num_samples:.6f}\t" if neg_loss is not None else ""
+                        f"Object Contrastive Loss: {cumulative_obj_contrastive_loss / num_samples:.6f}\t"
+                        f"Negative Loss: {cumulative_neg_loss / num_samples:.6f}, Property Loss: {cumulative_property_loss / num_samples:.6f}, Counting Loss: {cumulative_counting_loss / num_samples:.6f}, Spatial Loss: {cumulative_spatial_loss / num_samples:.6f}\t"
                         )
+                    
 
                     if gen_loss is not None:
                         cumulative_gen_loss += gen_loss * batch_size
@@ -446,11 +452,12 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                             f"Generative Loss: {cumulative_gen_loss / num_samples:.6f}\t")
                 
 
-            val_metrics = get_clip_metrics(
-                image_features=torch.cat(all_image_features),
-                text_features=torch.cat(all_text_features),
-                logit_scale=logit_scale.cpu(),
-            )
+            # val_metrics = get_clip_metrics(
+            #     image_features=torch.cat(all_image_features),
+            #     text_features=torch.cat(all_text_features),
+            #     logit_scale=logit_scale.cpu(),
+            # )
+            val_metrics = {}
             loss = cumulative_total_loss / num_samples
             metrics.update(
                 {**val_metrics, "clip_val_total_loss": loss.item(), "epoch": epoch, "num_samples": num_samples}
@@ -464,6 +471,13 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
                         "clip_val_property_loss": (cumulative_property_loss / num_samples).item(),
                         "clip_val_counting_loss": (cumulative_counting_loss / num_samples).item(),
                         "clip_val_spatial_loss": (cumulative_spatial_loss / num_samples).item(),
+                    }
+                )
+
+            if cumulative_obj_contrastive_loss is not None:
+                metrics.update(
+                    {
+                        "clip_val_obj_contrastive_loss": (cumulative_obj_contrastive_loss / num_samples).item(),
                     }
                 )
 

@@ -257,7 +257,7 @@ def get_convert_patches(bbox, patch_size, n_patches_row, n_patches_col):
 
 def get_object_token_attention_mask(bboxes, image_original_size, image_resize_size, patch_size=32, obj_token_nums=10, background_token_nums=1, use_vm=False):
     """
-    给定 bbox 和 patch 大小，返回 bbox 覆盖的所有 patch 的索引
+    生成 object token 的 attention mask
     """
     if isinstance(image_resize_size, int):
         H, W = image_resize_size, image_resize_size
