@@ -74,9 +74,21 @@ def backward(total_loss, scaler):
     else:
         total_loss.backward()
 
+def get_model_extra_params_key(args):
+    params_key = ['image', 'text']
+    if args.use_obj_token or args.use_img_token_vm:
+        params_key.extend(['attn_mask'])
+    if args.use_obj_token and args.use_obj_level_contrastive:
+        params_key.extend(["obj_texts", "obj_texts_mask"])
+    if args.use_obj_token and args.use_property_negatives:
+        params_key.extend(["property_negatives"])
+    if args.use_obj_token and args.use_relation_negatives:
+        params_key.extend(["relation_texts", "relation_negatives", "relation_obj_idx", "relation_texts_mask"])
+    return params_key
 
 def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, tb_writer=None):
     device = torch.device(args.device)
+    loss.to(device=device, non_blocking=True)
     autocast = get_autocast(args.precision, device_type=device.type)
     input_dtype = get_input_dtype(args.precision)
 
@@ -96,92 +108,37 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
     end = time.time()
+
+    params_key = get_model_extra_params_key(args)
     for i, batch in enumerate(dataloader):
         i_accum = i // args.accum_freq
         step = num_batches_per_epoch * epoch + i_accum
 
+        batch_dict = {k: v.to(device=device, non_blocking=True) if hasattr(v, 'to') else v for k, v in zip(params_key, batch)}
+        # 添加是否使用 obj token 的标志
+        batch_dict['use_obj_token'] = args.use_obj_token
+
         if not args.skip_scheduler:
             scheduler(step)
-
-        objects_sense = None
-        visible_matrix = None
-        property_pos = None
-        property_neg = None
-        counting_pos = None
-        counting_neg = None
-        spatial_pos = None
-        spatial_neg = None
-
-        images, texts = batch[0].to(device=device, non_blocking=True), batch[1].to(device=device, non_blocking=True)
-        if args.objects_sense_format:
-            objects_sense = batch[2].to(device=device, non_blocking=True)
-            if args.use_visible_matrix:
-                visible_matrix = batch[3].to(device=device, non_blocking=True)
-
-        if args.use_obj_tokens:
-            visible_matrix = batch[2].to(device=device, non_blocking=True)
-            obj_texts, obj_texts_mask = batch[3].to(device=device, non_blocking=True), batch[4].to(device=device, non_blocking=True)
-
-        if args.vl_negs:
-            start_idx = 2 + (1 if args.objects_sense_format else 0) + (1 if args.use_visible_matrix else 0)
-            
-            property_pos = batch[start_idx].to(device=device, non_blocking=True)
-            property_neg = batch[start_idx + 1].to(device=device, non_blocking=True)
-            counting_pos = batch[start_idx + 2].to(device=device, non_blocking=True)
-            counting_neg = batch[start_idx + 3].to(device=device, non_blocking=True)
-            spatial_pos = batch[start_idx + 4].to(device=device, non_blocking=True)
-            spatial_neg = batch[start_idx + 5].to(device=device, non_blocking=True)
 
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
             with autocast():
-                model_out = model(
-                            image=images,
-                            text=texts,
-                            obj_texts=obj_texts if args.use_obj_tokens else None,
-                            objects_sense=objects_sense,
-                            visible_matrix=visible_matrix,
-                            visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
-                            property_pos=property_pos,
-                            property_neg=property_neg,
-                            counting_pos=counting_pos,
-                            counting_neg=counting_neg,
-                            spatial_pos=spatial_pos,
-                            spatial_neg=spatial_neg,
-                        )
+                model_out = model(**batch_dict)
                 logit_scale = model_out["logit_scale"]
                 if args.distill:
                     with torch.no_grad():
                         dist_model_out = dist_model(images, texts)
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
-                # losses = loss(**model_out, output_dict=True)
-                losses = {}
-                total_loss, contrastive_loss, obj_contrative_loss, neg_loss, property_loss, counting_loss, spatial_loss = loss(
-                    model_out["image_features"],
-                    model_out["text_features"],
-                    model_out["obj_image_features"],
-                    model_out["obj_text_features"],
-                    obj_texts_mask,
-                    model_out["logit_scale"],
-                    model_out["property_pos_features"],
-                    model_out["property_neg_features"],
-                    model_out["counting_pos_features"],
-                    model_out["counting_neg_features"],
-                    model_out["spatial_pos_features"],
-                    model_out["spatial_neg_features"],
-                )
+                model_out['obj_texts_mask'] = batch_dict.get('obj_texts_mask', None)
+                model_out['relation_texts_mask'] = batch_dict.get('relation_texts_mask', None)
+                model_out['relation_obj_idx'] = batch_dict.get('relation_obj_idx', None)
+                
+                losses = loss(**model_out, output_dict=True)
 
-                losses["loss"] = total_loss
-                losses["contrastive_loss"] = contrastive_loss
-                losses["neg_loss"] = neg_loss
-                losses["property_loss"] = property_loss
-                losses["counting_loss"] = counting_loss
-                losses["spatial_loss"] = spatial_loss
-                losses["obj_contrative_loss"] = obj_contrative_loss
-
-            backward(total_loss, scaler)
+            backward(losses['total_loss'], scaler)
         else:
             # First, cache the features without any gradient tracking.
             with torch.no_grad():
@@ -263,7 +220,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         end = time.time()
         batch_count = i_accum + 1
         if is_master(args) and (i_accum % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
-            batch_size = len(images)
+            batch_size = len(batch)
             num_samples = batch_count * batch_size * args.accum_freq * args.world_size
             samples_per_epoch = dataloader.num_samples
             percent_complete = 100.0 * batch_count / num_batches_per_epoch

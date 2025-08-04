@@ -87,29 +87,16 @@ class ClipLoss(nn.Module):
         self.labels = {}
         self.args = args
 
-    def forward(self, image_features, text_features, obj_image_features, obj_text_features, obj_text_mask, logit_scale, property_pos_features, property_neg_features, counting_pos_features, counting_neg_features, spatial_pos_features, spatial_neg_features):
+        # 添加 relation image 混合线型层 
+        dim = 512
+        self.relation_proj = nn.Linear(3 * dim, dim)
+
+    def forward(self, image_features, text_features, logit_scale, **kwargs):
         device = image_features.device
+        total_loss = torch.tensor(0.0, device=device)
+        out_dict = {}
 
-        neg_loss = torch.zeros(()).to(device)
-        property_loss = torch.zeros(()).to(device)
-        counting_loss = torch.zeros(()).to(device)
-        spatial_loss = torch.zeros(()).to(device)
-
-        obj_contrastive_loss = torch.zeros(()).to(device)
-
-        if self.args.vl_negs:
-            if property_pos_features is not None:
-                property_loss = self.get_group_loss(
-                    image_features, property_pos_features, property_neg_features, logit_scale)
-
-            if counting_pos_features is not None:
-                counting_loss = self.get_group_loss(
-                    image_features, counting_pos_features, counting_neg_features, logit_scale)
-
-            if spatial_pos_features is not None:
-                spatial_loss = self.get_group_loss(
-                    image_features, spatial_pos_features, spatial_neg_features, logit_scale)
-
+        # base contrastive loss
         if self.world_size > 1:
             all_image_features, all_text_features = gather_features(
                 image_features, text_features,
@@ -138,168 +125,203 @@ class ClipLoss(nn.Module):
             labels = self.labels[device]
 
         contrastive_loss = (
-                                   F.cross_entropy(logits_per_image, labels) +
-                                   F.cross_entropy(logits_per_text, labels)
-                           ) / 2
+            F.cross_entropy(logits_per_image, labels) +
+            F.cross_entropy(logits_per_text, labels)
+        ) / 2
+        total_loss += contrastive_loss
+        out_dict['contrastive_loss'] = contrastive_loss
 
-        total_loss = contrastive_loss
-        if self.args.vl_negs:
-            property_weight, counting_weight, spatial_weight = self.args.neg_w
-            neg_loss = property_weight * property_loss + counting_weight * counting_loss + spatial_weight * spatial_loss
-            total_loss = total_loss + neg_loss
-        
-        if self.args.use_obj_tokens:
-            obj_contrastive_loss = get_obj_contrastive_loss(
-                obj_image_features, obj_text_features, logit_scale, obj_text_mask
+        # object contrastive loss
+        if 'obj_images_features' in kwargs and 'obj_texts_features' in kwargs:
+            obj_contrastive_loss = self.get_obj_contrastive_loss(
+                kwargs['obj_images_features'], kwargs['obj_texts_features'], kwargs['obj_texts_mask'], logit_scale
             )
-            total_loss = total_loss + obj_contrastive_loss
+            total_loss += obj_contrastive_loss
+            out_dict['obj_contrastive_loss'] = obj_contrastive_loss
+        
+        if 'obj_images_features' in kwargs and 'obj_texts_features' in kwargs and 'obj_property_negatives_features' in kwargs:
+            property_neg_loss = self.get_property_contrastive_loss(
+                kwargs['obj_images_features'], kwargs['obj_texts_features'], kwargs['obj_property_negatives_features'], kwargs['obj_texts_mask'], logit_scale
+            )
+            total_loss += property_neg_loss
+            out_dict['property_neg_loss'] = property_neg_loss
+        
+        if 'obj_images_features' in kwargs and 'relation_texts_features' in kwargs and 'relation_negatives_features' in kwargs:
+            relation_neg_loss = self.get_relation_contrastive_loss(image_features, 
+                kwargs['obj_images_features'], kwargs['relation_texts_features'], kwargs['relation_negatives_features'],kwargs['relation_obj_idx'], kwargs['relation_texts_mask'], logit_scale
+            )
+            total_loss += relation_neg_loss
+            out_dict['relation_neg_loss'] = relation_neg_loss
 
-        return total_loss, contrastive_loss, obj_contrastive_loss, neg_loss, property_loss, counting_loss, spatial_loss
+        out_dict['total_loss'] = total_loss
+        return out_dict                    
 
-    def get_group_loss(self, image_feats, pos_feats, neg_feats, logit_scale):
+    def get_obj_contrastive_loss(self, obj_image_features, obj_text_features, obj_mask, logit_scale):
         """
-        image_feats : (B, D)
-        pos_feats   : (B, D)
-        neg_feats   : (B, K, D)  或  (B, D)  或  None
+        计算对象级别的对比学习损失，并支持掩码过滤。
+
+        Args:
+            obj_image_features (torch.Tensor): 视觉对象特征，形状 [B, N_obj, D]
+            obj_text_features (torch.Tensor): 文本对象特征，形状 [B, N_obj, D]
+            logit_scale (torch.Tensor or float): 用于缩放 logits 的温度参数倒数
+            obj_mask (torch.Tensor): 布尔型掩码，形状 [B, N_obj]，
+                                    True 表示该位置的对象有效，False 表示无效。
+
+        Returns:
+            torch.Tensor: 计算得到的对象对比学习损失。
         """
-        B, D = image_feats.shape
-        device = image_feats.device
+        batch_size, num_obj_per_sample, _ = obj_image_features.shape
 
-        pos_feats = pos_feats.unsqueeze(1)
+        # 1. 计算相似度矩阵
+        # 形状: [B, N_obj, N_obj]
+        # (B, N_obj, D) @ (B, D, N_obj) -> (B, N_obj, N_obj)
+        logits_per_visual_text = logit_scale * (obj_image_features @ obj_text_features.permute(0, 2, 1))
 
-        if neg_feats is None:
-            feat_cat = pos_feats  # (B, 1, D)
-        else:
-            if neg_feats.dim() == 2:
-                neg_feats = neg_feats.unsqueeze(1)  # (B, 1, D)
-            feat_cat = torch.cat([pos_feats, neg_feats], dim=1)  # (B, 1+K, D)
+        # 2. 构建目标标签 (每个样本内的对角线)
+        # 形状: [B, N_obj]
+        labels = torch.arange(num_obj_per_sample, device=logits_per_visual_text.device).unsqueeze(0).expand(batch_size, -1)
 
-        logits = logit_scale * torch.matmul(
-            feat_cat, image_feats.unsqueeze(2)  # (B, 1+K, 1)
-        ).squeeze(-1)
+        # 3. 展平 logits 和 labels 以适应 F.cross_entropy
+        # 形状: [B * N_obj, N_obj]
+        flat_logits = logits_per_visual_text.view(-1, num_obj_per_sample)
+        # 形状: [B * N_obj]
+        flat_labels = labels.reshape(-1)
 
-        target = torch.zeros(B, dtype=torch.long, device=device)  # 正样本在 0 位
-        return F.cross_entropy(logits, target)
+        # 4. 展平掩码
+        # 形状: [B * N_obj]
+        flat_obj_mask = obj_mask.view(-1)
 
-    def get_loss_neg_only(self, image_features, text_features, logit_scale,pos_that_have_negs):
-        num_imgs = image_features.shape[0]
-        image_features = image_features[pos_that_have_negs]
-        pos = text_features[:num_imgs][pos_that_have_negs].unsqueeze(1)
-        neg = text_features[num_imgs:].view((len(pos_that_have_negs), -1, text_features.shape[-1]))
-        pos_neg = torch.cat([pos,neg], dim=1)
-        image_features = image_features.unsqueeze(2)
-        logits = logit_scale * torch.matmul(pos_neg,image_features)[:,:,0]
-        ground_truth = torch.zeros(len(pos_that_have_negs)).long()
-        ground_truth = ground_truth.to(self.args.device, non_blocking=True)
-        total_loss = F.cross_entropy(logits, ground_truth)#zero is the right "class". the positive are always on the 0 place
-        return total_loss
+        # 5. 应用掩码，只选择有效对象的 logits 和 labels
+        # 这些 `valid_` 张量只包含 `obj_mask` 中为 True 的行/元素
+        valid_logits = flat_logits[flat_obj_mask] # 形状: [有效对象总数, N_obj]
+        valid_labels = flat_labels[flat_obj_mask] # 形状: [有效对象总数]
 
-    def get_loss_pos_only(self, image_features, text_features,poss_features, logit_scale):
-        logits_per_image_text_pos = logit_scale * image_features @ poss_features.t()
-        ground_truth = (torch.arange(len(logits_per_image_text_pos)).long()).to(self.args.device, non_blocking=True)
-        logits_text_pos_to_text = logit_scale * text_features @ poss_features.t()
-        if self.args.symmetric:
-            logits_per_image_text_pos_op = logit_scale * poss_features @ image_features.t()
-            logits_text_pos_to_text_op = logit_scale * poss_features @ text_features.t()
-            total_loss = (F.cross_entropy(logits_per_image_text_pos, ground_truth)
-                          + F.cross_entropy(logits_per_image_text_pos_op, ground_truth)
-                         ) / 2
-            total_loss += ( F.cross_entropy(logits_text_pos_to_text, ground_truth)
-                    + F.cross_entropy(logits_text_pos_to_text_op, ground_truth))/2
-            total_loss = total_loss/2
-        else:
-            total_loss = F.cross_entropy(logits_per_image_text_pos, ground_truth)
-            total_loss+= F.cross_entropy(logits_text_pos_to_text, ground_truth)
-            total_loss = total_loss / 2
+        # 6. 检查是否存在有效对象以避免计算空损失
+        if valid_logits.numel() == 0:
+            # 如果没有有效对象，则损失为 0，避免 NaN
+            return torch.tensor(0.0, device=obj_image_features.device)
 
+        # 7. 计算从视觉到文本的损失
+        loss_visual_text = F.cross_entropy(valid_logits, valid_labels)
 
-        if self.args.kl_pos:
-            kl_loss = nn.KLDivLoss(reduction="batchmean")
-            logits_per_image_text = logit_scale * image_features @ text_features.t()
-            two_pos_feat = torch.stack([torch.diagonal(logits_per_image_text,0),torch.diagonal(logits_per_image_text_pos,0)],dim=1)
-            ground_truth = F.softmax(0.5 + torch.zeros_like(two_pos_feat),dim=1).to(self.args.device, non_blocking=True)
-            log_probs = F.log_softmax(two_pos_feat, dim=1)
-            loss_kl = 0.1*kl_loss(log_probs, ground_truth)
-            total_loss += loss_kl
-        if self.args.common_batch_pos:
-            kl_loss = nn.KLDivLoss(reduction="batchmean")
-            text_and_pos_feat = torch.cat([text_features,poss_features])
-            logits_per_image_text_and_pos_feat = logit_scale * image_features @ text_and_pos_feat.t()
-            log_probs = F.log_softmax(logits_per_image_text_and_pos_feat, dim=1)
-            ground_truth = F.softmax((torch.cat([torch.eye(self.args.batch_size), torch.eye(self.args.batch_size)], dim=1) / 2),dim=1).to(self.args.device, non_blocking=True)
-            loss_kl_common_batch_pos = 0.01*kl_loss(log_probs, ground_truth)
-            total_loss += loss_kl_common_batch_pos
+        # 8. 计算从文本到视觉的对称损失
+        # 需要先转置原始 logits_per_visual_text，然后同样应用掩码
+        # [B, N_obj, N_obj] -> [B, N_obj, N_obj]
+        logits_per_text_visual = logits_per_visual_text.permute(0, 2, 1).contiguous()
+        # 展平以便应用掩码
+        flat_logits_T = logits_per_text_visual.view(-1, num_obj_per_sample)
+        
+        # 同样应用掩码过滤，确保只计算有效文本特征对应的损失
+        # 这里的 valid_logits_T 和 valid_labels 长度应该相同
+        valid_logits_T = flat_logits_T[flat_obj_mask]
 
+        # 计算对称损失
+        loss_text_visual = F.cross_entropy(valid_logits_T, valid_labels)
 
-        return total_loss
+        # 9. 计算最终的平均损失
+        object_contrastive_loss = (loss_visual_text + loss_text_visual) / 2
 
-def get_obj_contrastive_loss(obj_image_features, obj_text_features, logit_scale, obj_mask):
-    """
-    计算对象级别的对比学习损失，并支持掩码过滤。
+        return object_contrastive_loss
 
-    Args:
-        obj_image_features (torch.Tensor): 视觉对象特征，形状 [B, N_obj, D]
-        obj_text_features (torch.Tensor): 文本对象特征，形状 [B, N_obj, D]
-        logit_scale (torch.Tensor or float): 用于缩放 logits 的温度参数倒数
-        obj_mask (torch.Tensor): 布尔型掩码，形状 [B, N_obj]，
-                                True 表示该位置的对象有效，False 表示无效。
+    def get_property_contrastive_loss(self, obj_images_features, obj_texts_features, obj_property_negatives_features, obj_texts_mask, logit_scale):
+        """
+        计算对象属性级别的对比学习损失，包含正样本和负样本。
 
-    Returns:
-        torch.Tensor: 计算得到的对象对比学习损失。
-    """
-    batch_size, num_obj_per_sample, _ = obj_image_features.shape
+        Args:
 
-    # 1. 计算相似度矩阵
-    # 形状: [B, N_obj, N_obj]
-    # (B, N_obj, D) @ (B, D, N_obj) -> (B, N_obj, N_obj)
-    logits_per_visual_text = logit_scale * (obj_image_features @ obj_text_features.permute(0, 2, 1))
+            obj_images_features (torch.Tensor): 视觉对象特征，形状 [B, N_obj, D]
+            obj_texts_features (torch.Tensor): 文本对象正样本特征 (例如，匹配的属性描述)，形状 [B, N_obj, D]
+            obj_property_negatives_features (torch.Tensor): 文本对象属性负样本特征 (例如，不匹配的属性描述)，形状 [B, N_obj, D]
+            obj_texts_mask (torch.Tensor): 布尔型掩码，形状 [B, N_obj]，
+                                    True 表示该位置的对象有效，False 表示无效
+            logit_scale (torch.Tensor or float): 用于缩放 logits 的温度参数倒数
 
-    # 2. 构建目标标签 (每个样本内的对角线)
-    # 形状: [B, N_obj]
-    labels = torch.arange(num_obj_per_sample, device=logits_per_visual_text.device).unsqueeze(0).expand(batch_size, -1)
+        Returns:
+            torch.Tensor: 计算得到的属性对比学习损失。
+        """
+        B, N_obj, D = obj_images_features.shape
 
-    # 3. 展平 logits 和 labels 以适应 F.cross_entropy
-    # 形状: [B * N_obj, N_obj]
-    flat_logits = logits_per_visual_text.view(-1, num_obj_per_sample)
-    # 形状: [B * N_obj]
-    flat_labels = labels.reshape(-1)
+        # 1. 拼接正负样本文本  [B, N_obj, 2, D]
+        all_texts = torch.stack([obj_texts_features, obj_property_negatives_features], dim=2)   # [B, N_obj, 2, D]
 
-    # 4. 展平掩码
-    # 形状: [B * N_obj]
-    flat_obj_mask = obj_mask.view(-1)
+        # 2. 算所有 logit  [B, N_obj, 2]
+        # 对每个对象：分别和正/负文本做点积
+        logits = logit_scale * torch.sum(
+            obj_images_features.unsqueeze(2) * all_texts, dim=-1
+        )  # [B, N_obj, 2]
 
-    # 5. 应用掩码，只选择有效对象的 logits 和 labels
-    # 这些 `valid_` 张量只包含 `obj_mask` 中为 True 的行/元素
-    valid_logits = flat_logits[flat_obj_mask] # 形状: [有效对象总数, N_obj]
-    valid_labels = flat_labels[flat_obj_mask] # 形状: [有效对象总数]
+        # 3. label 都是0（正样本在最前）
+        labels = torch.zeros((B, N_obj), dtype=torch.long, device=logits.device)
 
-    # 6. 检查是否存在有效对象以避免计算空损失
-    if valid_logits.numel() == 0:
-        # 如果没有有效对象，则损失为 0，避免 NaN
-        return torch.tensor(0.0, device=obj_image_features.device)
+        # 4. 展平
+        logits_flat = logits.view(-1, 2)         # [B*N_obj, 2]
+        labels_flat = labels.view(-1)
+        mask_flat = obj_texts_mask.view(-1)
 
-    # 7. 计算从视觉到文本的损失
-    loss_visual_text = F.cross_entropy(valid_logits, valid_labels)
+        # 5. 只对有效对象计算损失
+        logits_valid = logits_flat[mask_flat]
+        labels_valid = labels_flat[mask_flat]
 
-    # 8. 计算从文本到视觉的对称损失
-    # 需要先转置原始 logits_per_visual_text，然后同样应用掩码
-    # [B, N_obj, N_obj] -> [B, N_obj, N_obj]
-    logits_per_text_visual = logits_per_visual_text.permute(0, 2, 1).contiguous()
-    # 展平以便应用掩码
-    flat_logits_T = logits_per_text_visual.view(-1, num_obj_per_sample)
+        if logits_valid.shape[0] == 0:
+            return torch.tensor(0.0, device=obj_images_features.device)
+
+        # 6. cross_entropy
+        loss = F.cross_entropy(logits_valid, labels_valid)
+        return loss
     
-    # 同样应用掩码过滤，确保只计算有效文本特征对应的损失
-    # 这里的 valid_logits_T 和 valid_labels 长度应该相同
-    valid_logits_T = flat_logits_T[flat_obj_mask]
+    def get_relation_contrastive_loss(
+        self, image_features, obj_images_features, relation_texts_features, relation_negatives_features, relation_obj_idx, relation_mask, logit_scale
+    ):
+        """
+        计算关系级别属性对比学习损失，支持 relation 关联对象索引及全局图像特征。
 
-    # 计算对称损失
-    loss_text_visual = F.cross_entropy(valid_logits_T, valid_labels)
+        relation_obj_idx: [B, N_rel, 2]  # 每个(B, k)位置是(obj1_idx, obj2_idx)，取obj_images_features用
+        """
 
-    # 9. 计算最终的平均损失
-    object_contrastive_loss = (loss_visual_text + loss_text_visual) / 2
+        B, N_rel, D = relation_texts_features.shape
+        device = image_features.device
 
-    return object_contrastive_loss
+        # 1. 组装每个relation的视觉特征表达（全局图+对象1+对象2，求平均/拼接/线性，示例为均值）
+        # 1.1 获取obj1、obj2特征 [B, N_rel, D]
+        obj1_feats = torch.gather(
+            obj_images_features,                  # [B, N_obj, D]
+            1,
+            relation_obj_idx[..., 0].unsqueeze(-1).expand(-1, -1, D)    # [B, N_rel, D]
+        )
+        obj2_feats = torch.gather(
+            obj_images_features,
+            1,
+            relation_obj_idx[..., 1].unsqueeze(-1).expand(-1, -1, D)
+        )
+        # 1.2 广播全局特征 [B, D] -> [B, N_rel, D]
+        img_global = image_features.unsqueeze(1).expand(-1, N_rel, -1)
 
+        # 1.3 综合视觉特征（均值或拼接都可，此处为平均）
+        # 你可以改成 torch.cat(..., dim=-1) 之后接线性层，这里简单平均
+        # relation_visual_feats = (img_global + obj1_feats + obj2_feats) / 3.0      # [B, N_rel, D] 
+        relation_visual_feats = self.relation_proj(torch.cat([img_global, obj1_feats, obj2_feats], dim=-1))
+
+        # 2. 拼接正负文本特征 [B, N_rel, 2, D]
+        all_texts = torch.stack([relation_texts_features, relation_negatives_features], dim=2)
+
+        # 3. 计算 logits [B, N_rel, 2]
+        logits = logit_scale * torch.sum(
+            relation_visual_feats.unsqueeze(2) * all_texts, dim=-1
+        )    # InfoNCE风格
+
+        # 4. 构建标签、展平、mask、过滤无效
+        labels = torch.zeros((B, N_rel), dtype=torch.long, device=device)
+        logits_flat = logits.view(-1, 2)
+        labels_flat = labels.view(-1)
+        mask_flat = relation_mask.view(-1)
+        logits_valid = logits_flat[mask_flat]
+        labels_valid = labels_flat[mask_flat]
+
+        if logits_valid.numel() == 0:
+            return torch.tensor(0.0, device=device)
+        
+        loss = F.cross_entropy(logits_valid, labels_valid)
+        return loss
 
 
 class CoCaLoss(ClipLoss):

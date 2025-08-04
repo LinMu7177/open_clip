@@ -1,0 +1,22 @@
+python -m open_clip_train.main \
+  --save-frequency 1 \
+  --zeroshot-frequency 1 \
+  --report-to tensorboard \
+  --dataset-type webdataset \
+  --train-data /mnt/shared/CLEVR-Synth/{00000..00022}.tar \
+  --val-data /mnt/shared/CLEVR-Synth/{00023..00024}.tar \
+  --train-num-samples 2026943 \
+  --val-num-samples 214761 \
+  --warmup 10000 \
+  --batch-size 8 \
+  --lr 1e-5 \
+  --wd 0.1 \
+  --epochs 25 \
+  --workers 4 \
+  --model ViT-B-32 \
+  --pretrained /mnt/shared/models/open_clip/CLIP-ViT-B-32-laion2B-s34B-b79K/open_clip_pytorch_model.bin \
+  --early_stop_step 5 \
+  --use_obj_token \
+  --use_obj_level_contrastive \
+  --use_property_negatives \
+  --use_relation_negatives

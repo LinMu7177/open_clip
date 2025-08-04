@@ -275,9 +275,15 @@ class CLIP(nn.Module):
                 no_wd.add('visual.' + n)
         return no_wd
 
-    def encode_image(self, image, object_sense=None, visible_matrix=None, visible_matrix_layers=None, normalize: bool = False):
-        features, obj_image_features = self.visual(image, object_sense, visible_matrix, visible_matrix_layers)
-        return F.normalize(features, dim=-1) if normalize else features, F.normalize(obj_image_features, dim=-1) if normalize else obj_image_features
+    def encode_image(self, image, attn_mask: Optional[torch.Tensor] = None, use_obj_tokens: bool = False, normalize: bool = False):
+        if use_obj_tokens:
+            # Use object tokens if specified
+            features, obj_image_features = self.visual(image, attn_mask=attn_mask, use_obj_tokens=use_obj_tokens)
+            return F.normalize(features, dim=-1) if normalize else features, F.normalize(obj_image_features, dim=-1) if normalize else obj_image_features
+        else:
+            # Use standard image encoding
+            features = self.visual(image)
+            return F.normalize(features, dim=-1) if normalize else features
 
     def encode_text(self, text, normalize: bool = False):
         cast_dtype = self.transformer.get_cast_dtype()
@@ -305,59 +311,60 @@ class CLIP(nn.Module):
         text_logits = image_logits.T
         return image_logits, text_logits
 
+    def encode_multi_text(self, texts: torch.Tensor):
+
+        batch_size, num_texts, seq_len = texts.shape
+        # 将 num_texts 维度合并到 batch 维度
+        texts = texts.view(batch_size * num_texts, seq_len)
+        # 编码文本特征
+        text_features = self.encode_text(texts, normalize=True)
+        # 恢复原形状用于后续对比计算
+        text_features = text_features.view(batch_size, num_texts, -1)
+        return text_features
+
     def forward(
             self,
             image: Optional[torch.Tensor] = None,
             text: Optional[torch.Tensor] = None,
-            obj_texts: Optional[torch.Tensor] = None,
-            objects_sense: Optional[torch.Tensor] = None,
-            visible_matrix: Optional[torch.Tensor] = None,
-            visible_matrix_layers: Optional[int] = None,
-            property_pos: Optional[torch.Tensor] = None,
-            property_neg: Optional[torch.Tensor] = None,
-            counting_pos: Optional[torch.Tensor] = None,
-            counting_neg: Optional[torch.Tensor] = None,
-            spatial_pos: Optional[torch.Tensor] = None,
-            spatial_neg: Optional[torch.Tensor] = None
+            **kwargs: Any,
     ):
-        image_features, obj_image_features = self.encode_image(image, objects_sense, visible_matrix, visible_matrix_layers, normalize=True) if image is not None else None
+        out_dict = {"logit_scale": self.logit_scale.exp()}
+        # 是否添加 attn_mask
+        attn_mask = kwargs.get('attn_mask', None)
+        # 编码 image
+        if kwargs.get('use_obj_token', False):
+            image_features, obj_images_features = self.encode_image(image, attn_mask=attn_mask, use_obj_tokens=True)
+            out_dict['image_features'] = image_features
+            out_dict['obj_images_features'] = obj_images_features
+        else:
+            image_features = self.encode_image(image, normalize=True) if image is not None else None
+            out_dict['image_features'] = image_features
+
+        # 编码 text
         text_features = self.encode_text(text, normalize=True) if text is not None else None
+        out_dict['text_features'] = text_features
+        
+        # 是否添加 object level 对比学习
+        if 'obj_texts' in kwargs:
+            obj_texts = kwargs['obj_texts']
+            obj_texts_features = self.encode_multi_text(obj_texts) if obj_texts is not None else None
+            out_dict['obj_texts_features'] = obj_texts_features
 
-        property_pos_features = self.encode_text(property_pos, normalize=True) if property_pos is not None else None
-        property_neg_features = self.encode_text(property_neg, normalize=True) if property_neg is not None else None
-        counting_pos_features = self.encode_text(counting_pos, normalize=True) if counting_pos is not None else None
-        counting_neg_features = self.encode_text(counting_neg, normalize=True) if counting_neg is not None else None
-        spatial_pos_features = self.encode_text(spatial_pos, normalize=True) if spatial_pos is not None else None
-        spatial_neg_features = self.encode_text(spatial_neg, normalize=True) if spatial_neg is not None else None
-
-        obj_text_features = None
-        if obj_texts is not None:
-            # 输入形状: [batch_size, num_texts, seq_len] = [512, 10, 77]
-            batch_size, num_texts, seq_len = obj_texts.shape
-
-            # 将 num_texts 维度合并到 batch 维度
-            obj_texts = obj_texts.view(batch_size * num_texts, seq_len)  # [512*10, 77]
-
-            # 编码文本特征
-            obj_text_features = self.encode_text(obj_texts, normalize=True)  # 假设输出 [512*10, D]
-
-            # 恢复原形状用于后续对比计算
-            obj_text_features = obj_text_features.view(batch_size, num_texts, -1)  # [512, 10, D]
+        if 'obj_texts' in kwargs and 'property_negatives' in kwargs:
+            obj_property_negatives = kwargs['property_negatives']
+            obj_property_negatives_features = self.encode_multi_text(obj_property_negatives) if obj_property_negatives is not None else None
+            out_dict['obj_property_negatives_features'] = obj_property_negatives_features
+        
+        if 'relation_texts' in kwargs and 'relation_negatives' in kwargs:
+            relation_texts = kwargs['relation_texts']
+            relation_negatives = kwargs['relation_negatives']
+            relation_texts_features = self.encode_multi_text(relation_texts) if relation_texts is not None else None
+            relation_negatives_features = self.encode_multi_text(relation_negatives) if relation_negatives is not None else None
+            out_dict['relation_texts_features'] = relation_texts_features
+            out_dict['relation_negatives_features'] = relation_negatives_features
 
         if self.output_dict:
-            out_dict = {
-                "image_features": image_features,
-                "text_features": text_features,
-                "obj_image_features": obj_image_features,
-                "obj_text_features": obj_text_features,
-                "property_pos_features": property_pos_features,
-                "property_neg_features": property_neg_features,
-                "counting_pos_features": counting_pos_features,
-                "counting_neg_features": counting_neg_features,
-                "spatial_pos_features": spatial_pos_features,
-                "spatial_neg_features": spatial_neg_features,
-                "logit_scale": self.logit_scale.exp()
-            }
+            out_dict = out_dict.copy()
             if self.logit_bias is not None:
                 out_dict['logit_bias'] = self.logit_bias
             return out_dict

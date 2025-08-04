@@ -654,21 +654,20 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def forward(self, x: torch.Tensor, alpha=None, visible_matrix=None, visible_matrix_layers=None):
-        if alpha is not None and visible_matrix is None:
-            x = self.conv1(x) + self.conv1_alpha(alpha)
-        else:
-            x = self.conv1(x)  # shape = [*, width, grid, grid]
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None, use_obj_tokens: bool = False):
+        x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
 
         # class embeddings
         x = torch.cat([_expand_token(self.class_embedding, x.shape[0]).to(x.dtype), x], dim=1)
+
         # object embeddings and background embedding
-        if hasattr(self, 'object_embedding'):
+        if hasattr(self, 'object_embedding') and use_obj_tokens:
             object_tokens = _expand_token(self.object_embedding, x.shape[0])
             background_tokens = _expand_token(self.background_embedding, x.shape[0])
             x = torch.cat([object_tokens, background_tokens, x], dim=1)
+
         # shape = [*, grid ** 2 + 1, width]
         # positional embeddings
         x = x + self.positional_embedding.to(x.dtype)
@@ -678,15 +677,14 @@ class VisionTransformer(nn.Module):
         
         # add visible matrix
         # (B, L, S) -> (B * num_heads, L, S)
-        attn_mask = None
-        if visible_matrix is not None:
-            if len(visible_matrix.size()) == 3:
-                attn_mask = visible_matrix.repeat(self.num_heads, 1, 1)
-            elif len(visible_matrix.size()) == 4:
+        if attn_mask is not None:
+            if len(attn_mask.size()) == 3:
+                attn_mask = attn_mask.repeat(self.num_heads, 1, 1)
+            elif len(attn_mask.size()) == 4:
                 # (B, 2, L, S) -> (B * num_heads, 2, L, S)
-                attn_mask = visible_matrix.repeat(self.num_heads, 1, 1, 1)
+                attn_mask = attn_mask.repeat(self.num_heads, 1, 1, 1)
 
-        x = self.transformer(x, attn_mask=attn_mask, attn_mask_layers=visible_matrix_layers)
+        x = self.transformer(x, attn_mask=attn_mask)
 
         if self.attn_pool is not None:
             if self.attn_pool_contrastive is not None:
@@ -713,10 +711,11 @@ class VisionTransformer(nn.Module):
         if self.proj is not None:
             pooled = pooled @ self.proj
 
-        if self.obj_token_nums is not None:
+        if use_obj_tokens:
             object_token_outputs = tokens[:,:self.obj_token_nums]
             object_token_outputs = object_token_outputs @ self.proj # shape: [B, nums_obj_tokens, proj_dim]
-            return pooled, object_token_outputs
+            new_pooled = x[:, 0:self.obj_token_nums+1].mean(dim=1) @ self.proj
+            return new_pooled, object_token_outputs
 
 
         if self.output_tokens:

@@ -519,7 +519,6 @@ def get_visible_matrix(sample, patch_size):
     # vm = get_object_token_attention_mask(image_size=sample['image'].size, patch_size=patch_size)
     return vm
 
-
 def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokenizer=None, negs_creator=None, num_workers=4):
     input_shards = args.train_data if is_train else args.val_data
     assert input_shards is not None
@@ -583,129 +582,146 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
         ])
 
     # base pipeline
+    def decode_json(sample):
+        sample['obj_info'] = json.loads(sample['obj_info'])
+        sample['relation_info'] = json.loads(sample['relation_info'])
+        return sample
+    
     pipeline.extend([
         wds.select(filter_no_caption_or_no_image),
         wds.decode("pilrgb", handler=log_and_continue),
-        wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt", info="json"),
+        wds.rename(key="__key__", image="jpg;png;jpeg;webp", text="txt", 
+        ),
+        wds.map(decode_json),
     ])
     tuple_keys = ["image", "text"]
 
-    # add objects_sense
-    if args.objects_sense_format:
-
-        def add_objects_sense(sample):
-            sample["objects_sense"] = get_objects_sense(
-                sample, args.objects_sense_format
-            )
-            return sample
-
-        preprocess_img.transforms = preprocess_img.transforms[1:]
-        pipeline.extend([wds.map(add_objects_sense), wds.map(join_preprocess)])
-        tuple_keys.append("objects_sense")
-
-        if args.use_visible_matrix:
-            patch_size = get_model_config(args.model)["vision_cfg"]["patch_size"]
-
-            def add_visible_matrix(sample):
-                sample["visible_matrix"] = get_visible_matrix(sample, patch_size)
-                return sample
-
-            pipeline.extend(
-                [
-                    wds.map(add_visible_matrix),
-                ]
-            )
-            tuple_keys.append("visible_matrix")
-
-    if args.use_obj_tokens:
-        def add_visible_matrix(sample):
+    # 1.判断是否使用 obj_token
+    if args.use_obj_token:
+        def add_obj_token_mask(sample):
             mask = get_object_token_attention_mask(
-                bboxes=sample['info']['merged_bboxes']['<OD>']['bboxes'],
+                bboxes=sample['obj_info']['obj_bboxes'],
                 image_original_size=sample['image'].size, 
                 image_resize_size=preprocess_img.transforms[0].size,
                 patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"]
             )
-
-            if args.use_visible_matrix:
-                mask_vm = get_object_token_attention_mask(
-                    bboxes=sample['info']['merged_bboxes']['<OD>']['bboxes'],
-                    image_original_size=sample['image'].size, 
-                    image_resize_size=preprocess_img.transforms[0].size,
-                    patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"],
-                    use_vm=True
-                )
-                mask = torch.stack([mask, mask_vm], dim=0)  # (2, H, W)
-            sample['visible_matrix'] = mask
-            return sample
-
-        def add_obj_texts(sample):
-            # add object tokens to the text
-            obj_texts = sample['info']['merged_bboxes']['<OD>']['caption'] 
-            obj_texts_padding = obj_texts + [''] * (args.obj_token_nums - len(obj_texts))
-
-            obj_texts_mask = [0] * args.obj_token_nums
-
-            # 如果存在相同的 caption，则只保留一个
-            distinct_set = set()
-            for i in range(len(obj_texts)):
-                if obj_texts[i] not in distinct_set:
-                    distinct_set.add(obj_texts[i])
-                    obj_texts_mask[i] = 1
-            
-            obj_texts_mask = torch.tensor(
-                obj_texts_mask,
-                dtype=torch.bool
-            )
-
-            sample['obj_texts'] = tokenizer(obj_texts_padding)
-            sample['obj_texts_mask'] = obj_texts_mask
+            sample['attn_mask'] = mask
             return sample
         
-        pipeline.extend(
-            [
-                wds.map(add_visible_matrix),
-                wds.map(add_obj_texts),
-            ]
-        )
-        tuple_keys.extend(["visible_matrix", "obj_texts", "obj_texts_mask"])
+        pipeline.extend([
+            wds.map(add_obj_token_mask),
+        ])
+    
+    # 2. 判断是否使用 img_token_visible_matrix
+    if args.use_img_token_vm:
+        def add_visible_matrix(sample):
+            mask = get_visible_matrix(sample, patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"])
+            
+            if args.use_obj_token:
+                # 如果使用了 obj_token，则把 vm 和 attn_mask 合并
+                mask = sample['attn_mask'] + mask
 
-    if args.vl_negs:
-        pipeline.extend(
-            [
-                wds.map(
-                    lambda sample: {
-                        **sample,
-                        **generate_pns(sample['info'], args.neg_type),
-                    }
-                ),
-                wds.map_dict(
-                    property_pos=lambda property_pos: tokenizer(property_pos)[0],
-                    property_neg=lambda property_neg: tokenizer(property_neg)[0],
-                    counting_pos=lambda counting_pos: tokenizer(counting_pos)[0],
-                    counting_neg=lambda counting_neg: tokenizer(counting_neg)[0],
-                    spatial_pos=lambda spatial_pos: tokenizer(spatial_pos)[0],
-                    spatial_neg=lambda spatial_neg: tokenizer(spatial_neg)[0],
-                ),
-            ]
-        )
-        tuple_keys.extend(
-            [
-                "property_pos",
-                "property_neg",
-                "counting_pos",
-                "counting_neg",
-                "spatial_pos",
-                "spatial_neg",
-            ]
-        )
-    pipeline.extend(
-        [
-            wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
-            wds.to_tuple(*tuple_keys),
-            wds.batched(args.batch_size, partial=not is_train),
-        ]
-    )
+            sample['attn_mask'] = mask
+            return sample
 
+        pipeline.extend([
+            wds.map(add_visible_matrix),
+        ])
+
+    if args.use_obj_token or args.use_img_token_vm:
+        # 如果使用了 obj_token 或者 img_token_visible_matrix，则 tuple_keys 中添加 attn_mask
+        tuple_keys.append("attn_mask")
+
+    # 3. 判断是否使用 obj_level_contrastive
+    if args.use_obj_token and args.use_obj_level_contrastive:
+        def add_obj_texts(sample):
+            # 1. 获取每个对象的caption列表
+            obj_captions = sample['obj_info']['obj_captions']
+
+            # 2. 裁剪或填充到指定 obj_token_nums 长度
+            if len(obj_captions) >= args.obj_token_nums:
+                obj_texts = obj_captions[:args.obj_token_nums]
+            else:
+                obj_texts = obj_captions + [''] * (args.obj_token_nums - len(obj_captions))
+
+            # 3. 生成对应的 mask，表示每个caption是否为去重后的唯一有效项
+            seen = set()
+            obj_texts_mask = [False] * args.obj_token_nums
+            for i, cap in enumerate(obj_texts):
+                if cap and cap not in seen:
+                    seen.add(cap)
+                    obj_texts_mask[i] = True  # 只对第一次出现的caption置为True
+
+            # 4. 编码对象文本
+            sample['obj_texts'] = tokenizer(obj_texts)
+            # 5. 转换mask为torch.Tensor
+            sample['obj_texts_mask'] = torch.tensor(obj_texts_mask, dtype=torch.bool)
+            return sample
+
+        pipeline.extend([
+            wds.map(add_obj_texts),
+        ])
+        tuple_keys.extend(["obj_texts", "obj_texts_mask"])
+
+    # 4. 判断是否使用 property_negatives
+    if args.use_obj_token and args.use_property_negatives:
+        def add_property_negatives(sample):
+            # 1. 获取每个对象的属性列表
+            obj_property_negatives = sample['obj_info']['obj_property_negatives']
+
+            # 2. 裁剪或填充到指定 obj_token_nums 长度
+            if len(obj_property_negatives) >= args.obj_token_nums:
+                property_negatives = obj_property_negatives[:args.obj_token_nums]
+            else:
+                property_negatives = obj_property_negatives + [''] * (args.obj_token_nums - len(obj_property_negatives))
+
+            # 3. 编码对象属性
+            sample['property_negatives'] = tokenizer(property_negatives)
+            return sample
+
+        pipeline.extend([
+            wds.map(add_property_negatives),
+        ])
+        tuple_keys.extend(["property_negatives"])
+
+    # 5. 判断是否使用 relation_negatives
+    if args.use_obj_token and args.use_relation_negatives:
+        def add_relation_negatives(sample):
+            # 1. 获取每个对象的关系列表
+            obj_relation_idx = sample['relation_info']['relation_obj_idx']
+            obj_relation = sample['relation_info']['relation_captions']
+            obj_relation_negatives = sample['relation_info']['relation_negatives']
+
+            # 2. 裁剪或填充到指定 obj_token_nums 长度
+            if len(obj_relation) >= args.obj_token_nums:
+                relation_texts = obj_relation[:args.obj_token_nums]
+                relation_negatives = obj_relation_negatives[:args.obj_token_nums]
+                obj_relation_idx = obj_relation_idx[:args.obj_token_nums]
+            else:
+                relation_texts = obj_relation + [''] * (args.obj_token_nums - len(obj_relation))
+                relation_negatives = obj_relation_negatives + [''] * (args.obj_token_nums - len(obj_relation_negatives))
+                obj_relation_idx = obj_relation_idx + [[0, 0]] * (args.obj_token_nums - len(obj_relation_idx))
+            
+            obj_relation_mask = [True] * len(obj_relation) + [False] * (args.obj_token_nums - len(obj_relation))
+
+            sample['relation_texts'] = tokenizer(relation_texts)
+            sample['relation_negatives'] = tokenizer(relation_negatives)
+            sample['relation_obj_idx'] = torch.tensor(obj_relation_idx)
+            sample['relation_texts_mask'] = torch.tensor(obj_relation_mask, dtype=torch.bool)
+
+            return sample
+
+        pipeline.extend([
+            wds.map(add_relation_negatives),
+        ])
+        tuple_keys.extend(["relation_texts", "relation_negatives", "relation_obj_idx", "relation_texts_mask"])
+
+    pipeline.extend([
+        wds.map_dict(image=preprocess_img, text=lambda text: tokenizer(text)[0]),
+        wds.to_tuple(*tuple_keys),
+        wds.batched(args.batch_size, partial=not is_train),
+    ])
+    
     dataset = wds.DataPipeline(*pipeline)
 
     if is_train:
