@@ -87,10 +87,6 @@ class ClipLoss(nn.Module):
         self.labels = {}
         self.args = args
 
-        # 添加 relation image 混合线型层 
-        dim = 512
-        self.relation_proj = nn.Linear(3 * dim, dim)
-
     def forward(self, image_features, text_features, logit_scale, **kwargs):
         device = image_features.device
         total_loss = torch.tensor(0.0, device=device)
@@ -298,8 +294,7 @@ class ClipLoss(nn.Module):
 
         # 1.3 综合视觉特征（均值或拼接都可，此处为平均）
         # 你可以改成 torch.cat(..., dim=-1) 之后接线性层，这里简单平均
-        # relation_visual_feats = (img_global + obj1_feats + obj2_feats) / 3.0      # [B, N_rel, D] 
-        relation_visual_feats = self.relation_proj(torch.cat([img_global, obj1_feats, obj2_feats], dim=-1))
+        relation_visual_feats = (img_global + obj1_feats + obj2_feats) / 3.0      # [B, N_rel, D] 
 
         # 2. 拼接正负文本特征 [B, N_rel, 2, D]
         all_texts = torch.stack([relation_texts_features, relation_negatives_features], dim=2)

@@ -1,4 +1,4 @@
-python -m open_clip_train.main \
+nohup python -m open_clip_train.main \
   --save-frequency 1 \
   --zeroshot-frequency 1 \
   --report-to tensorboard \
@@ -8,7 +8,7 @@ python -m open_clip_train.main \
   --train-num-samples 2026943 \
   --val-num-samples 214761 \
   --warmup 10000 \
-  --batch-size 8 \
+  --batch-size 256 \
   --lr 1e-5 \
   --wd 0.1 \
   --epochs 25 \
@@ -19,4 +19,5 @@ python -m open_clip_train.main \
   --use_obj_token \
   --use_obj_level_contrastive \
   --use_property_negatives \
-  --use_relation_negatives
+  --use_relation_negatives \
+  > train.log 2>&1 &

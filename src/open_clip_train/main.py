@@ -471,7 +471,7 @@ def main(args):
             from open_clip.utils import convert_int8_model_to_inference_mode
             convert_int8_model_to_inference_mode(model)
         # Evaluate.
-        evaluate(model, data, start_epoch, args, tb_writer=writer, tokenizer=tokenizer)
+        evaluate(model, data, loss, start_epoch, args, tb_writer=writer, tokenizer=tokenizer)
         return
 
     loss = create_loss(args)
@@ -486,7 +486,7 @@ def main(args):
         completed_epoch = epoch + 1
 
         if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):
-            metrics = evaluate(model, data, completed_epoch, args, tb_writer=writer, tokenizer=tokenizer)
+            metrics = evaluate(model, data, loss, completed_epoch, args, tb_writer=writer, tokenizer=tokenizer)
 
         # Saving checkpoints.
         if args.save_logs:

@@ -21,6 +21,7 @@ from open_clip_train.distributed import is_master
 from open_clip_train.zero_shot import zero_shot_eval
 from open_clip_train.precision import get_autocast
 
+from collections import defaultdict
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -88,7 +89,6 @@ def get_model_extra_params_key(args):
 
 def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist_model, args, tb_writer=None):
     device = torch.device(args.device)
-    loss.to(device=device, non_blocking=True)
     autocast = get_autocast(args.precision, device_type=device.type)
     input_dtype = get_input_dtype(args.precision)
 
@@ -137,8 +137,9 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                 model_out['relation_obj_idx'] = batch_dict.get('relation_obj_idx', None)
                 
                 losses = loss(**model_out, output_dict=True)
+                total_loss = losses['total_loss']
 
-            backward(losses['total_loss'], scaler)
+            backward(total_loss, scaler)
         else:
             # First, cache the features without any gradient tracking.
             with torch.no_grad():
@@ -220,7 +221,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         end = time.time()
         batch_count = i_accum + 1
         if is_master(args) and (i_accum % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
-            batch_size = len(batch)
+            batch_size = len(batch_dict['image'])
             num_samples = batch_count * batch_size * args.accum_freq * args.world_size
             samples_per_epoch = dataloader.num_samples
             percent_complete = 100.0 * batch_count / num_batches_per_epoch
@@ -276,7 +277,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
     # end for
 
 
-def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
+def evaluate(model, data, loss, epoch, args, tb_writer=None, tokenizer=None):
     metrics = {}
     if not is_master(args):
         return metrics
@@ -294,157 +295,46 @@ def evaluate(model, data, epoch, args, tb_writer=None, tokenizer=None):
         num_samples = 0
         samples_per_val = dataloader.num_samples
 
-        # FIXME this does not scale past small eval datasets
-        # all_image_features @ all_text_features will blow up memory and compute very quickly
-        cumulative_total_loss = torch.zeros(()).to(device)
-        cumulative_contrastive_loss = torch.zeros(()).to(device)
-        cumulative_obj_contrastive_loss = torch.zeros(()).to(device)
-        cumulative_gen_loss = torch.zeros(()).to(device)
-        cumulative_neg_loss = torch.zeros(()).to(device)
-        cumulative_property_loss = torch.zeros(()).to(device)
-        cumulative_counting_loss = torch.zeros(()).to(device)
-        cumulative_spatial_loss = torch.zeros(()).to(device)
-        all_image_features, all_text_features = [], []
+        cumulative_losses = defaultdict(lambda: torch.tensor(0.0, device=device))
+
         with torch.inference_mode():
+            params_key = get_model_extra_params_key(args)
             for i, batch in enumerate(dataloader):
-                objects_sense = None
-                visible_matrix = None
-                property_pos = None
-                property_neg = None
-                counting_pos = None
-                counting_neg = None
-                spatial_pos = None
-                spatial_neg = None
-
-                images, texts = batch[0].to(device=device, non_blocking=True), batch[1].to(device=device, non_blocking=True)
-                if args.objects_sense_format:
-                    objects_sense = batch[2].to(device=device, non_blocking=True)
-                    if args.use_visible_matrix:
-                        visible_matrix = batch[3].to(device=device, non_blocking=True)
-                if args.vl_negs:
-                    start_idx = 2 + (1 if args.objects_sense_format else 0) + (1 if args.use_visible_matrix else 0)
-                    property_pos = batch[start_idx].to(device=device, non_blocking=True)
-                    property_neg = batch[start_idx + 1].to(device=device, non_blocking=True)
-                    counting_pos = batch[start_idx + 2].to(device=device, non_blocking=True)
-                    counting_neg = batch[start_idx + 3].to(device=device, non_blocking=True)
-                    spatial_pos = batch[start_idx + 4].to(device=device, non_blocking=True)
-                    spatial_neg = batch[start_idx + 5].to(device=device, non_blocking=True)
-
-                if args.use_obj_tokens:
-                    visible_matrix = batch[2].to(device=device, non_blocking=True)
-                    obj_texts, obj_texts_mask = batch[3].to(device=device, non_blocking=True), batch[4].to(device=device, non_blocking=True)
+                batch_dict = {k: v.to(device=device, non_blocking=True) if hasattr(v, 'to') else v for k, v in zip(params_key, batch)}
+                batch_dict['use_obj_token'] = args.use_obj_token
 
                 with autocast():
-                    model_out = model(
-                            image=images,
-                            text=texts,
-                            obj_texts=obj_texts if args.use_obj_tokens else None,
-                            objects_sense=objects_sense,
-                            visible_matrix=visible_matrix,
-                            visible_matrix_layers=args.visible_matrix_layers if args.use_visible_matrix else None,
-                            property_pos=property_pos,
-                            property_neg=property_neg,
-                            counting_pos=counting_pos,
-                            counting_neg=counting_neg,
-                            spatial_pos=spatial_pos,
-                            spatial_neg=spatial_neg,
-                        )
-                    image_features = model_out["image_features"]
-                    text_features = model_out["text_features"]
-                    logit_scale = model_out["logit_scale"]
-                    # features are accumulated in CPU tensors, otherwise GPU memory exhausted quickly
-                    # however, system RAM is easily exceeded and compute time becomes problematic
-                    all_image_features.append(image_features.cpu())
-                    all_text_features.append(text_features.cpu())
-                    logit_scale = logit_scale.mean()
-                    logits_per_image = logit_scale * image_features @ text_features.t()
-                    logits_per_text = logits_per_image.t()
+                    model_out = model(**batch_dict)
+                    model_out['obj_texts_mask'] = batch_dict.get('obj_texts_mask', None)
+                    model_out['relation_texts_mask'] = batch_dict.get('relation_texts_mask', None)
+                    model_out['relation_obj_idx'] = batch_dict.get('relation_obj_idx', None)
 
-                    batch_size = images.shape[0]
-                    labels = torch.arange(batch_size, device=device).long()
-                    contrastive_loss = (
-                                         F.cross_entropy(logits_per_image, labels) +
-                                         F.cross_entropy(logits_per_text, labels)
-                                 ) / 2
-                    
-                    gen_loss = maybe_compute_generative_loss(model_out)
-
-                    neg_loss, property_loss, counting_loss, spatial_loss = maybe_compute_neg_loss(args, model_out)
-
-                    from open_clip.loss import get_obj_contrastive_loss
-                    obj_contrastive_loss = get_obj_contrastive_loss(
-                        model_out["obj_image_features"],
-                        model_out["obj_text_features"],
-                        logit_scale,
-                        obj_texts_mask,
-                    )
-
-                cumulative_contrastive_loss += contrastive_loss * batch_size
-                cumulative_total_loss += contrastive_loss * batch_size
-                if neg_loss is not None:
-                    cumulative_neg_loss += neg_loss * batch_size
-                    cumulative_property_loss += property_loss * batch_size
-                    cumulative_counting_loss += counting_loss * batch_size
-                    cumulative_spatial_loss += spatial_loss * batch_size
-                    # add neg loss to total loss
-                    cumulative_total_loss += neg_loss * batch_size
-
-                if obj_contrastive_loss is not None:
-                    cumulative_obj_contrastive_loss += obj_contrastive_loss * batch_size
-                    cumulative_total_loss += obj_contrastive_loss * batch_size
-        
-                num_samples += batch_size 
-                if is_master(args) and (i % 100) == 0:
-                    logging.info(
-                        f"Eval Epoch: {epoch} [{num_samples} / {samples_per_val}]\t"
-                        f"Total Loss: {cumulative_total_loss / num_samples:.6f}, Contrastive Loss: {cumulative_contrastive_loss / num_samples:.6f}\t"
-                        f"Object Contrastive Loss: {cumulative_obj_contrastive_loss / num_samples:.6f}\t"
-                        f"Negative Loss: {cumulative_neg_loss / num_samples:.6f}, Property Loss: {cumulative_property_loss / num_samples:.6f}, Counting Loss: {cumulative_counting_loss / num_samples:.6f}, Spatial Loss: {cumulative_spatial_loss / num_samples:.6f}\t"
-                        )
-                    
-
-                    if gen_loss is not None:
-                        cumulative_gen_loss += gen_loss * batch_size
-                        logging.info(
-                            f"Generative Loss: {cumulative_gen_loss / num_samples:.6f}\t")
+                    losses = loss(**model_out, output_dict=True)
                 
+                # accumulate losses
+                batch_size = len(batch_dict['image'])
+                num_samples += batch_size
+                for loss_name, loss_value in losses.items():
+                    cumulative_losses[loss_name] += loss_value * batch_size
+                    
+                if is_master(args) and (i % 100) == 0:
+                    msg = f"Eval Epoch: {epoch} [{num_samples} / {samples_per_val}]\t"
+                    loss_msgs = []
+                    for loss_name, loss_sum in cumulative_losses.items():
+                        loss_msgs.append(f"{loss_name.capitalize()}: {loss_sum / num_samples:.6f}")
+                    msg += "\t".join(loss_msgs)
+                    logging.info(msg)
 
-            # val_metrics = get_clip_metrics(
-            #     image_features=torch.cat(all_image_features),
-            #     text_features=torch.cat(all_text_features),
-            #     logit_scale=logit_scale.cpu(),
-            # )
-            val_metrics = {}
-            loss = cumulative_total_loss / num_samples
             metrics.update(
-                {**val_metrics, "clip_val_total_loss": loss.item(), "epoch": epoch, "num_samples": num_samples}
+                {
+                    f"clip_val_{name}": (cumulative_losses[name] / num_samples).item()
+                    for name in cumulative_losses
+                }
             )
-
-            if cumulative_neg_loss is not None:
-                metrics.update(
-                    {
-                        "clip_val_contrastive_loss": (cumulative_contrastive_loss / num_samples).item(),
-                        "clip_val_neg_loss": (cumulative_neg_loss / num_samples).item(),
-                        "clip_val_property_loss": (cumulative_property_loss / num_samples).item(),
-                        "clip_val_counting_loss": (cumulative_counting_loss / num_samples).item(),
-                        "clip_val_spatial_loss": (cumulative_spatial_loss / num_samples).item(),
-                    }
-                )
-
-            if cumulative_obj_contrastive_loss is not None:
-                metrics.update(
-                    {
-                        "clip_val_obj_contrastive_loss": (cumulative_obj_contrastive_loss / num_samples).item(),
-                    }
-                )
-
-            if gen_loss is not None:
-                gen_loss = cumulative_gen_loss / num_samples
-                metrics.update({"val_generative_loss": gen_loss.item()})
 
     if not metrics:
         return metrics
-
+         
     logging.info(
         f"Eval Epoch: {epoch} "
         + "\t".join([f"{k}: {round(v, 4):.4f}" for k, v in metrics.items()])
