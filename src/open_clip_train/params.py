@@ -522,7 +522,7 @@ def parse_args(args):
     parser.add_argument("--no_neg_in_contrastive", default=False, action="store_true", help="no_neg_in_contrastive")
     parser.add_argument("--neg_w", type=int, nargs=3, default=[1, 1, 1], help="negative loss weighting (property, counting, spatial)")
 
-    parser.add_argument("--ckpt_loss_filter", type=str, choices=['total', 'neg'], default="total", help="Which loss to use for filtering checkpoints")
+    parser.add_argument("--ckpt_loss_filter", type=str, choices=['total_loss', 'contrastive_loss'], default="total_loss", help="Which loss to use for filtering checkpoints")
     parser.add_argument("--early_stop_step", type=int, default=3, help="Early stop step")
 
     parser.add_argument("--use_visible_matrix", default=False, action="store_true", help="use visible matrix")

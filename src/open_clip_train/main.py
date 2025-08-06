@@ -508,7 +508,7 @@ def main(args):
             #     )
 
             if args.ckpt_loss_filter is not None:
-                key = 'clip_val_' + args.ckpt_loss_filter + '_loss'
+                key = f'clip_val_{args.ckpt_loss_filter}'
                 cur_loss = metrics[key]
                 if cur_loss < best_loss:
                     best_loss = cur_loss
