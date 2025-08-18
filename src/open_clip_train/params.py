@@ -534,11 +534,13 @@ def parse_args(args):
 
     parser.add_argument("--use_obj_token", default=False, action="store_true", help="use object token")
     parser.add_argument("--use_img_token_vm", default=False, action="store_true", help="use image token visible matrix")
+    parser.add_argument("--img_token_vm_layers", default=3, type=int, help="use image token visible matrix layers")
     parser.add_argument("--use_obj_level_contrastive", default=False, action="store_true", help="use object level contrastive loss")
     parser.add_argument("--use_property_negatives", default=False, action="store_true", help="use property negatives")
     parser.add_argument("--use_relation_negatives", default=False, action="store_true", help="use relation negatives")
-    
-    
+
+    parser.add_argument("--dataset_mix_type", type=str, choices=['shuffle', 'concat'], default="shuffle", help="Which dataset mixing strategy to use")
+
     args = parser.parse_args(args)
 
     if 'timm' not in args.opt:

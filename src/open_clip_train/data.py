@@ -34,7 +34,7 @@ import torchvision.transforms.functional as F
 from open_clip_train.svlc_learning.negs_and_pos import Negatives,NegativesLLM, ChunkSample,BothNegatives
 from open_clip_train.svlc_learning.pns_generater import generate_pns
 
-from open_clip.utils import get_visible_matrix_v2, get_object_token_attention_mask
+from open_clip.utils import get_visible_matrix_v2, get_object_token_attention_mask, get_obj_token_mask, get_img_token_vm_mask
 from open_clip.factory import get_model_config
 
 from torch import Tensor
@@ -554,7 +554,7 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
         pipeline = [wds.SimpleShardList(input_shards)]
 
     # at this point we have an iterator over all the shards
-    if is_train:
+    if is_train and args.dataset_mix_type == 'shuffle':
         if not resampled:
             pipeline.extend([
                 detshuffle2(
@@ -599,7 +599,7 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
     # 1.判断是否使用 obj_token
     if args.use_obj_token:
         def add_obj_token_mask(sample):
-            mask = get_object_token_attention_mask(
+            mask = get_obj_token_mask(
                 bboxes=sample['obj_info']['obj_bboxes'],
                 image_original_size=sample['image'].size, 
                 image_resize_size=preprocess_img.transforms[0].size,
@@ -615,11 +615,30 @@ def get_wds_dataset(args, preprocess_img, is_train, epoch=0, floor=False, tokeni
     # 2. 判断是否使用 img_token_visible_matrix
     if args.use_img_token_vm:
         def add_visible_matrix(sample):
-            mask = get_visible_matrix(sample, patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"])
-            
+            mask = get_img_token_vm_mask(
+                bboxes=sample['obj_info']['obj_bboxes'],
+                image_original_size=sample['image'].size,
+                image_resize_size=preprocess_img.transforms[0].size,
+                patch_size=get_model_config(args.model)["vision_cfg"]["patch_size"]
+            )
+            mask_zero = torch.zeros(mask.shape, dtype=torch.float32)
+
             if args.use_obj_token:
-                # 如果使用了 obj_token，则把 vm 和 attn_mask 合并
-                mask = sample['attn_mask'] + mask
+                # 如果使用了 obj_token，则把 vm_mask 和 obj_token_mask 合并
+                obj_token_mask = sample['attn_mask']
+                vm_mask = mask
+
+                # 去掉 [CLS] 对应的第一行和第一列
+                vm_mask = vm_mask[1:, 1:]
+
+                img_token_size = vm_mask.shape[0]
+                mask = mask_zero = obj_token_mask.clone() 
+                # 替换 obj_token_mask 最右下角的 img_token 部分
+                mask[-img_token_size:, -img_token_size:] = vm_mask
+
+            if args.img_token_vm_layers:
+                # 同时传入应用 vm 和不应用 vm 的 mask
+                mask = torch.stack((mask, mask_zero), dim=0)
 
             sample['attn_mask'] = mask
             return sample

@@ -275,10 +275,10 @@ class CLIP(nn.Module):
                 no_wd.add('visual.' + n)
         return no_wd
 
-    def encode_image(self, image, attn_mask: Optional[torch.Tensor] = None, use_obj_tokens: bool = False, normalize: bool = False):
+    def encode_image(self, image, attn_mask: Optional[torch.Tensor] = None, use_obj_tokens: bool = False, attn_mask_layers: int = None, normalize: bool = False):
         if use_obj_tokens:
             # Use object tokens if specified
-            features, obj_image_features = self.visual(image, attn_mask=attn_mask, use_obj_tokens=use_obj_tokens)
+            features, obj_image_features = self.visual(image, attn_mask=attn_mask, use_obj_tokens=use_obj_tokens, attn_mask_layers=attn_mask_layers)
             return F.normalize(features, dim=-1) if normalize else features, F.normalize(obj_image_features, dim=-1) if normalize else obj_image_features
         else:
             # Use standard image encoding
@@ -332,12 +332,13 @@ class CLIP(nn.Module):
         # 是否添加 attn_mask
         attn_mask = kwargs.get('attn_mask', None)
         # 编码 image
+        img_token_vm_layers = kwargs.get('img_token_vm_layers', None)
         if kwargs.get('use_obj_token', False):
-            image_features, obj_images_features = self.encode_image(image, attn_mask=attn_mask, use_obj_tokens=True)
+            image_features, obj_images_features = self.encode_image(image, attn_mask=attn_mask, use_obj_tokens=True, attn_mask_layers=img_token_vm_layers)
             out_dict['image_features'] = image_features
             out_dict['obj_images_features'] = obj_images_features
         else:
-            image_features = self.encode_image(image, normalize=True) if image is not None else None
+            image_features = self.encode_image(image, normalize=True, attn_mask_layers=img_token_vm_layers) if image is not None else None
             out_dict['image_features'] = image_features
 
         # 编码 text

@@ -117,6 +117,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
         batch_dict = {k: v.to(device=device, non_blocking=True) if hasattr(v, 'to') else v for k, v in zip(params_key, batch)}
         # 添加是否使用 obj token 的标志
         batch_dict['use_obj_token'] = args.use_obj_token
+        batch_dict['img_token_vm_layers'] = args.img_token_vm_layers
 
         if not args.skip_scheduler:
             scheduler(step)

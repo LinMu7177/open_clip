@@ -361,6 +361,181 @@ def get_object_token_attention_mask(bboxes, image_original_size, image_resize_si
     attention_mask = torch.tensor(vm, dtype=torch.float32)
     return attention_mask
 
+def get_obj_token_mask(bboxes, image_original_size, image_resize_size, patch_size=32, obj_token_nums=10, background_token_nums=1):
+    """
+    生成 object token 的 attn mask
+    """
+    if isinstance(image_resize_size, int):
+        W, H = image_resize_size, image_resize_size
+    else:
+        W, H = image_resize_size
+    W_old, H_old = image_original_size
 
+    scale_w, scale_h = W / W_old, H / H_old
+    n_patches_row, n_patches_col = (H + patch_size - 1) // patch_size, (W + patch_size - 1) // patch_size
+
+    # 1. 初始化 attn_mask
+    attn_mask = np.full((
+            1 + obj_token_nums + background_token_nums + n_patches_row * n_patches_col, 
+            1 + obj_token_nums + background_token_nums + n_patches_row * n_patches_col
+        ), 
+        fill_value=-1e9, dtype=np.float32
+    )
+    np.fill_diagonal(attn_mask, 0)
+
+    # 2. 计算所有有 obj 的 patch，以及背景 patch
+    all_obj_infos = []
+    all_obj_patches, background_patches = [], []
     
+    for idx, bbox in enumerate(bboxes):
+        # bbox 边界检查与修正
+        x1 = min(max(bbox[0], 0), W_old - 1)
+        y1 = min(max(bbox[1], 0), H_old - 1)
+        x2 = min(max(bbox[2], 0), W_old - 1)
+        y2 = min(max(bbox[3], 0), H_old - 1)
+        # 如果右下角坐标比左上角小，做调整
+        x1, x2 = min(x1, x2), max(x1, x2)
+        y1, y2 = min(y1, y2), max(y1, y2)
+
+        # 对于 bbox 中的每个元素 resize
+        bbox_resized = [x1 * scale_w, y1 * scale_h, x2 * scale_w, y2 * scale_h]
+
+        patches = get_convert_patches(bbox_resized, patch_size, n_patches_row, n_patches_col)
+        all_obj_infos.append({
+            'obj_id': idx,
+            'patches': patches,
+            'size': (bbox[2] - bbox[0]) *  (bbox[3] - bbox[1]),
+        })
+        all_obj_patches.extend(patches)
+    background_patches = list(set(range(n_patches_row * n_patches_col)) - set(all_obj_patches))
+
+    # 3. 填充 attn_mask
+    img_patch_start_idx = 1 + obj_token_nums + background_token_nums
+    for idx, sub_attn_mask in enumerate(attn_mask):
+        if idx == 0:
+            # CLS token 可以看见所有 patch
+            sub_attn_mask[img_patch_start_idx:] = 0  
+        elif idx <= obj_token_nums:
+            # obj token 只能看到对应 obj 所在的 patch
+            idx_ = idx - 1
+            if idx_ >= len(all_obj_infos):
+                # 图像中的 obj 数量小于 obj_token_nums，也作为背景处理
+                for p_idx in background_patches:
+                    sub_attn_mask[img_patch_start_idx + p_idx] = 0
+            else:
+                for p_idx in all_obj_infos[idx_]['patches']:
+                    sub_attn_mask[img_patch_start_idx + p_idx] = 0
+        elif idx <= obj_token_nums + background_token_nums:
+            # 背景 patch
+            for p_idx in background_patches:
+                sub_attn_mask[img_patch_start_idx + p_idx] = 0
+        else:
+            # 图像 patch
+            idx_ = idx - (1 + obj_token_nums + background_token_nums)
+            # CLS 可以看见
+            sub_attn_mask[0] = 0
+            # 可以看见的 object token
+            smallest_obj_id, smamllest_size = -1, float('inf')
+            for obj_info in all_obj_infos:
+                if idx_ in obj_info['patches']:
+                    # 该 patch 属于某个 obj
+                    sub_attn_mask[1 + obj_info['obj_id']] = 0
+                    # 记录最小的 obj
+                    if obj_info['size'] < smamllest_size:
+                        smallest_obj_id, smamllest_size = obj_info['obj_id'], obj_info['size']
+            
+            # 如果不属于任何一个 obj，与 background token 交互
+            if smallest_obj_id == -1:
+                for p_idx in range(len(all_obj_infos) + 1, 1 + obj_token_nums + background_token_nums):
+                    sub_attn_mask[1 + p_idx] = 0
+            
+            # 将所有 img patch 都置为 0
+            sub_attn_mask[img_patch_start_idx:] = 0
     
+    # 4. 转为 tensor
+    attn_mask_tensor = torch.tensor(attn_mask, dtype=torch.float32)
+    return attn_mask_tensor
+
+
+def get_img_token_vm_mask(bboxes, image_original_size, image_resize_size, patch_size=32):
+    """
+    生成 img token visible matrix 的 attn_mask
+    """
+    if isinstance(image_resize_size, int):
+        H, W = image_resize_size, image_resize_size
+    else:
+        H, W = image_resize_size
+    W_old, H_old = image_original_size
+
+    scale_w = W / W_old
+    scale_h = H / H_old
+
+    n_patches_row = (H + patch_size - 1) // patch_size
+    n_patches_col = (W + patch_size - 1) // patch_size
+
+    # 1. 初始化 attn_mask ([CLS] + img tokens)
+    attn_mask = np.full((
+        1 + n_patches_row * n_patches_col,
+        1 + n_patches_row * n_patches_col
+        ), 
+        fill_value=-1e9, dtype=np.float32
+    )
+    np.fill_diagonal(attn_mask, 0)
+
+    # 2. 计算所有有 obj 的 patch，以及背景 patch
+    all_obj_infos = []
+    all_obj_patches, background_patches = [], []
+
+    for idx, bbox in enumerate(bboxes):
+        # bbox 边界检查与修正
+        x1 = min(max(bbox[0], 0), W_old - 1)
+        y1 = min(max(bbox[1], 0), H_old - 1)
+        x2 = min(max(bbox[2], 0), W_old - 1)
+        y2 = min(max(bbox[3], 0), H_old - 1)
+        # 如果右下角坐标比左上角小，做调整
+        x1, x2 = min(x1, x2), max(x1, x2)
+        y1, y2 = min(y1, y2), max(y1, y2)
+
+        # 对于 bbox 中的每个元素 resize
+        bbox_resized = [x1 * scale_w, y1 * scale_h, x2 * scale_w, y2 * scale_h]
+
+        patches = get_convert_patches(bbox_resized, patch_size, n_patches_row, n_patches_col)
+        all_obj_infos.append({
+            'obj_id': idx,
+            'patches': patches,
+            'size': (bbox[2] - bbox[0]) *  (bbox[3] - bbox[1]),
+        })
+        all_obj_patches.extend(patches)
+
+    # 3. 填充 attn_mask
+    for idx, sub_attn_mask in enumerate(attn_mask):
+        if idx == 0:
+            # CLS token 可以看见所有 patch
+            sub_attn_mask[1:] = 0
+        else:
+            # 图像 patch
+            idx_ = idx - 1
+            # CLS 可以看见
+            sub_attn_mask[0] = 0
+
+            # 统计占有该 patch 的 obj 中，最小的一个
+            smallest_obj_id, smamllest_size = -1, float('inf')
+            for obj_info in all_obj_infos:
+                if idx_ in obj_info['patches']:
+                    # 该 patch 属于某个 obj
+                    sub_attn_mask[1 + obj_info['obj_id']] = 0
+                    # 记录最小的 obj
+                    if obj_info['size'] < smamllest_size:
+                        smallest_obj_id, smamllest_size = obj_info['obj_id'], obj_info['size']
+            
+            # 如果不属于任何一个 obj，跳过
+            if smallest_obj_id == -1:
+                continue
+
+            # 找到最小的 obj 所包含的所有其他 patch，能够看到
+            for p_idx in all_obj_infos[smallest_obj_id]['patches']:
+                sub_attn_mask[1 + p_idx] = 0
+
+    # 4. 转为 tensor
+    attn_mask_tensor = torch.tensor(attn_mask, dtype=torch.float32)
+    return attn_mask_tensor

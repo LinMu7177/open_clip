@@ -365,33 +365,28 @@ class Transformer(nn.Module):
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None, attn_mask_layers: Optional[int] = None):
         if not self.batch_first:
             x = x.transpose(0, 1).contiguous()    # NLD -> LND
+
+        # add attn mask
+        if len(attn_mask.size()) == 4:
+            mask, mask_zero = torch.split(attn_mask, 1, dim=1)
+            mask = mask.squeeze(1)  # (B, 1, L, S) -> (B, L, S)
+            mask_zero = mask_zero.squeeze(1)  # (B, 1, L, S) -> (B, L, S)
+        else:
+            # 同时包含了 attn mask size 为 3 和 None 的情况
+            mask, mask_zero = attn_mask, attn_mask
+
         for i, r in enumerate(self.resblocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
                 x = checkpoint(r, x, None, None, attn_mask)
             else:
-                if len(attn_mask.size()) == 4:
-                    mask, mask_vm = torch.split(attn_mask, 1, dim=1)
-                    mask = mask.squeeze(1)  # (B, 1, L, S) -> (B, L, S)
-                    mask_vm = mask_vm.squeeze(1)  # (B, 1, L, S) -> (B, L, S)
+                if attn_mask_layers is None: 
+                    x = r(x, attn_mask=mask)
                 else:
-                    mask, mask_vm = attn_mask, attn_mask
-                
-                if attn_mask_layers is not None:
-                    # attn_mask_layers 不为空表示来自 image encoder 的调用
                     if i < attn_mask_layers:
-                        # 如果 i < attn_mask_layers 则表示需要 vm 限制
-                        x = r(x, attn_mask=mask_vm)
-                    else:
-                        # 如果 i >= attn_mask_layers 则表示不用 vm 限制
                         x = r(x, attn_mask=mask)
-                else:
-                    x = r(x, attn_mask=None)    
-                # # add visible matrix for "attn_mask_layers" layers
-                # if attn_mask_layers is not None and i >= attn_mask_layers:
-                #     # attn_mask_layers 不为空表示来自 image encoder 的调用，如果 >=i 则表示不用 vm 限制
-                #     attn_mask = None
-                # x = r(x, attn_mask=attn_mask)
+                    else:
+                        x = r(x, attn_mask=mask_zero)
         if not self.batch_first:
             x = x.transpose(0, 1)    # LND -> NLD
         return x
@@ -654,7 +649,7 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None, use_obj_tokens: bool = False):
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None, use_obj_tokens: bool = False, attn_mask_layers: int = None):
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -676,15 +671,17 @@ class VisionTransformer(nn.Module):
         x = self.ln_pre(x)
         
         # add visible matrix
-        # (B, L, S) -> (B * num_heads, L, S)
+
         if attn_mask is not None:
             if len(attn_mask.size()) == 3:
+                # (B, L, S) -> (B * num_heads, L, S)
                 attn_mask = attn_mask.repeat(self.num_heads, 1, 1)
+                attn_mask_layers = None
             elif len(attn_mask.size()) == 4:
                 # (B, 2, L, S) -> (B * num_heads, 2, L, S)
                 attn_mask = attn_mask.repeat(self.num_heads, 1, 1, 1)
 
-        x = self.transformer(x, attn_mask=attn_mask)
+        x = self.transformer(x, attn_mask=attn_mask, attn_mask_layers=attn_mask_layers)
 
         if self.attn_pool is not None:
             if self.attn_pool_contrastive is not None:
@@ -716,7 +713,6 @@ class VisionTransformer(nn.Module):
             object_token_outputs = object_token_outputs @ self.proj # shape: [B, nums_obj_tokens, proj_dim]
             new_pooled = x[:, 0:self.obj_token_nums+1].mean(dim=1) @ self.proj
             return new_pooled, object_token_outputs
-
 
         if self.output_tokens:
             return pooled, tokens
