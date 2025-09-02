@@ -127,26 +127,31 @@ class ClipLoss(nn.Module):
         total_loss += contrastive_loss
         out_dict['contrastive_loss'] = contrastive_loss
 
+        # loss weight
+        obj_contrastive_loss_weight, property_neg_loss_weight, relation_neg_loss_weight = 0.1, 1, 1
         # object contrastive loss
         if 'obj_images_features' in kwargs and 'obj_texts_features' in kwargs:
             obj_contrastive_loss = self.get_obj_contrastive_loss(
                 kwargs['obj_images_features'], kwargs['obj_texts_features'], kwargs['obj_texts_mask'], logit_scale
             )
-            total_loss += obj_contrastive_loss
+            total_loss += obj_contrastive_loss_weight * obj_contrastive_loss
             out_dict['obj_contrastive_loss'] = obj_contrastive_loss
         
         if 'obj_images_features' in kwargs and 'obj_texts_features' in kwargs and 'obj_property_negatives_features' in kwargs:
             property_neg_loss = self.get_property_contrastive_loss(
                 kwargs['obj_images_features'], kwargs['obj_texts_features'], kwargs['obj_property_negatives_features'], kwargs['obj_texts_mask'], logit_scale
             )
-            total_loss += property_neg_loss
+            total_loss += property_neg_loss_weight * property_neg_loss
             out_dict['property_neg_loss'] = property_neg_loss
         
         if 'obj_images_features' in kwargs and 'relation_texts_features' in kwargs and 'relation_negatives_features' in kwargs:
-            relation_neg_loss = self.get_relation_contrastive_loss(image_features, 
-                kwargs['obj_images_features'], kwargs['relation_texts_features'], kwargs['relation_negatives_features'],kwargs['relation_obj_idx'], kwargs['relation_texts_mask'], logit_scale
+            # relation_neg_loss = self.get_relation_contrastive_loss(image_features, 
+            #     kwargs['obj_images_features'], kwargs['relation_texts_features'], kwargs['relation_negatives_features'],kwargs['relation_obj_idx'], kwargs['relation_texts_mask'], logit_scale
+            # )
+            relation_neg_loss = self.get_relation_contrastive_loss(
+                kwargs['relation_images_features'], kwargs['relation_texts_features'], kwargs['relation_negatives_features'], kwargs['relation_texts_mask'], logit_scale
             )
-            total_loss += relation_neg_loss
+            total_loss += relation_neg_loss_weight * relation_neg_loss
             out_dict['relation_neg_loss'] = relation_neg_loss
 
         out_dict['total_loss'] = total_loss
@@ -264,57 +269,90 @@ class ClipLoss(nn.Module):
         # 6. cross_entropy
         loss = F.cross_entropy(logits_valid, labels_valid)
         return loss
-    
+
+    # def get_relation_contrastive_loss(
+    #     self, image_features, obj_images_features, relation_texts_features, relation_negatives_features, relation_obj_idx, relation_mask, logit_scale
+    # ):
+    #     """
+    #     计算关系级别属性对比学习损失，支持 relation 关联对象索引及全局图像特征。
+
+    #     relation_obj_idx: [B, N_rel, 2]  # 每个(B, k)位置是(obj1_idx, obj2_idx)，取obj_images_features用
+    #     """
+
+    #     B, N_rel, D = relation_texts_features.shape
+    #     device = image_features.device
+
+    #     # 1. 组装每个relation的视觉特征表达（全局图+对象1+对象2，求平均/拼接/线性，示例为均值）
+    #     # 1.1 获取obj1、obj2特征 [B, N_rel, D]
+    #     obj1_feats = torch.gather(
+    #         obj_images_features,                  # [B, N_obj, D]
+    #         1,
+    #         relation_obj_idx[..., 0].unsqueeze(-1).expand(-1, -1, D)    # [B, N_rel, D]
+    #     )
+    #     obj2_feats = torch.gather(
+    #         obj_images_features,
+    #         1,
+    #         relation_obj_idx[..., 1].unsqueeze(-1).expand(-1, -1, D)
+    #     )
+    #     # 1.2 广播全局特征 [B, D] -> [B, N_rel, D]
+    #     img_global = image_features.unsqueeze(1).expand(-1, N_rel, -1)
+
+    #     # 1.3 综合视觉特征（均值或拼接都可，此处为平均）
+    #     # 你可以改成 torch.cat(..., dim=-1) 之后接线性层，这里简单平均
+    #     relation_visual_feats = (img_global + obj1_feats + obj2_feats) / 3.0      # [B, N_rel, D] 
+
+    #     # 2. 拼接正负文本特征 [B, N_rel, 2, D]
+    #     all_texts = torch.stack([relation_texts_features, relation_negatives_features], dim=2)
+
+    #     # 3. 计算 logits [B, N_rel, 2]
+    #     logits = logit_scale * torch.sum(
+    #         relation_visual_feats.unsqueeze(2) * all_texts, dim=-1
+    #     )    # InfoNCE风格
+
+    #     # 4. 构建标签、展平、mask、过滤无效
+    #     labels = torch.zeros((B, N_rel), dtype=torch.long, device=device)
+    #     logits_flat = logits.view(-1, 2)
+    #     labels_flat = labels.view(-1)
+    #     mask_flat = relation_mask.view(-1)
+    #     logits_valid = logits_flat[mask_flat]
+    #     labels_valid = labels_flat[mask_flat]
+
+    #     if logits_valid.numel() == 0:
+    #         return torch.tensor(0.0, device=device)
+        
+    #     loss = F.cross_entropy(logits_valid, labels_valid)
+    #     return loss
+
     def get_relation_contrastive_loss(
-        self, image_features, obj_images_features, relation_texts_features, relation_negatives_features, relation_obj_idx, relation_mask, logit_scale
+        self, relation_image_features, relation_texts_features, relation_negatives_features, relation_mask, logit_scale
     ):
-        """
-        计算关系级别属性对比学习损失，支持 relation 关联对象索引及全局图像特征。
+        B, N_obj, D = relation_image_features.shape
 
-        relation_obj_idx: [B, N_rel, 2]  # 每个(B, k)位置是(obj1_idx, obj2_idx)，取obj_images_features用
-        """
+        # 1. 拼接正负样本文本  [B, N_obj, 2, D]
+        all_texts = torch.stack([relation_texts_features, relation_negatives_features], dim=2)   # [B, N_obj, 2, D]
 
-        B, N_rel, D = relation_texts_features.shape
-        device = image_features.device
-
-        # 1. 组装每个relation的视觉特征表达（全局图+对象1+对象2，求平均/拼接/线性，示例为均值）
-        # 1.1 获取obj1、obj2特征 [B, N_rel, D]
-        obj1_feats = torch.gather(
-            obj_images_features,                  # [B, N_obj, D]
-            1,
-            relation_obj_idx[..., 0].unsqueeze(-1).expand(-1, -1, D)    # [B, N_rel, D]
-        )
-        obj2_feats = torch.gather(
-            obj_images_features,
-            1,
-            relation_obj_idx[..., 1].unsqueeze(-1).expand(-1, -1, D)
-        )
-        # 1.2 广播全局特征 [B, D] -> [B, N_rel, D]
-        img_global = image_features.unsqueeze(1).expand(-1, N_rel, -1)
-
-        # 1.3 综合视觉特征（均值或拼接都可，此处为平均）
-        # 你可以改成 torch.cat(..., dim=-1) 之后接线性层，这里简单平均
-        relation_visual_feats = (img_global + obj1_feats + obj2_feats) / 3.0      # [B, N_rel, D] 
-
-        # 2. 拼接正负文本特征 [B, N_rel, 2, D]
-        all_texts = torch.stack([relation_texts_features, relation_negatives_features], dim=2)
-
-        # 3. 计算 logits [B, N_rel, 2]
+        # 2. 算所有 logit  [B, N_obj, 2]
+        # 对每个对象：分别和正/负文本做点积
         logits = logit_scale * torch.sum(
-            relation_visual_feats.unsqueeze(2) * all_texts, dim=-1
-        )    # InfoNCE风格
+            relation_image_features.unsqueeze(2) * all_texts, dim=-1
+        )  # [B, N_obj, 2]
 
-        # 4. 构建标签、展平、mask、过滤无效
-        labels = torch.zeros((B, N_rel), dtype=torch.long, device=device)
-        logits_flat = logits.view(-1, 2)
+        # 3. label 都是0（正样本在最前）
+        labels = torch.zeros((B, N_obj), dtype=torch.long, device=logits.device)
+
+        # 4. 展平
+        logits_flat = logits.view(-1, 2)         # [B*N_obj, 2]
         labels_flat = labels.view(-1)
         mask_flat = relation_mask.view(-1)
+
+        # 5. 只对有效对象计算损失
         logits_valid = logits_flat[mask_flat]
         labels_valid = labels_flat[mask_flat]
 
-        if logits_valid.numel() == 0:
-            return torch.tensor(0.0, device=device)
-        
+        if logits_valid.shape[0] == 0:
+            return torch.tensor(0.0, device=relation_image_features.device)
+
+        # 6. cross_entropy
         loss = F.cross_entropy(logits_valid, labels_valid)
         return loss
 

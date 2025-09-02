@@ -257,6 +257,12 @@ class CLIP(nn.Module):
         else:
             self.logit_bias = None
 
+        # 或者使用文本特征生成查询
+        self.query_proj = nn.Linear(embed_dim, embed_dim)
+
+        # 文本到视觉的注意力层
+        self.cross_attention = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=4, batch_first=True)
+
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         # lock image tower as per LiT - https://arxiv.org/abs/2111.07991
         self.visual.lock(unlocked_groups=unlocked_groups, freeze_bn_stats=freeze_bn_stats)
@@ -284,6 +290,95 @@ class CLIP(nn.Module):
             # Use standard image encoding
             features = self.visual(image)
             return F.normalize(features, dim=-1) if normalize else features
+
+    def encode_image_with_text_attn(self, image, attn_mask: Optional[torch.Tensor] = None, use_obj_tokens: bool = False, attn_mask_layers: int = None, normalize: bool = False, text_features: Optional[torch.Tensor] = None, obj_texts_mask: Optional[torch.Tensor] = None):
+        # 肯定使用了 obj_tokens
+        features, obj_image_features = self.visual(image, attn_mask=attn_mask, use_obj_tokens=use_obj_tokens, attn_mask_layers=attn_mask_layers)
+
+        visual_features = torch.cat([features.unsqueeze(1), obj_image_features], dim=1)  # shape: [B, 1 + num_obj_tokens, D]
+
+        # 从文本特征生成查询（如果你想要文本指导）
+        if text_features is not None:
+            query = text_features.unsqueeze(1) # [B, 1, D]
+
+        # 计算 key_padding_mask
+        cls_mask = torch.ones(obj_texts_mask.size(0), 1, device=obj_texts_mask.device, dtype=obj_texts_mask.dtype)  # [B, 1]
+        obj_tokens_padding_mask = torch.cat([cls_mask, obj_texts_mask], dim=1).logical_not()  # [B, 1 + num_obj_tokens]
+
+        # 使用注意力机制计算融合权重
+        attn_output, attn_weights = self.cross_attention(
+            query=query,           # [B, 1, D] - 我们要生成1个融合特征
+            key=visual_features,   # [B, 11, D]
+            value=visual_features,  # [B, 11, D]
+            key_padding_mask=obj_tokens_padding_mask  # [B, 11] - 遮挡掉无效的 obj tokens
+        )
+
+        # attn_output: [B, 1, D], 直接 squeeze 得到 [B, D]
+        fused_features = attn_output.squeeze(1)
+
+        return (
+            F.normalize(fused_features, dim=-1) if normalize else fused_features,
+            F.normalize(obj_image_features, dim=-1) if normalize else obj_image_features,
+            features, obj_image_features
+        )
+
+    def encode_relation_image_with_text_attn(
+        self,
+        features,
+        obj_image_features,
+        normalize: bool = False,
+        text_features: Optional[torch.Tensor] = None,
+        relation_obj_idx: Optional[torch.Tensor] = None,
+    ):
+        device = features.device
+
+        # 拼接 cls token 和 obj tokens
+        visual_features = torch.cat([features.unsqueeze(1), obj_image_features], dim=1)  # shape: [B, 1 + num_obj_tokens, D]
+
+        # 获取批次大小 B、关系数量 R（=10）和最大对象数量 N
+        B, R, _ = relation_obj_idx.shape
+        N = obj_image_features.size(1)
+
+        # 2. 将 visual_features 重复 R 次以匹配关系的批次维度
+        visual_features_repeated = visual_features.repeat_interleave(R, dim=0) # [B*R, 1 + N, D]
+
+        # 3. 将 text_features 和 relation_obj_idx 展平
+        text_features_reshaped = text_features.view(B * R, -1) # [B*R, D]
+        relation_obj_idx_reshaped = relation_obj_idx.view(B * R, -1) # [B*R, 2]
+
+        # 4. 动态生成 key_padding_mask
+        # 创建一个全 True（表示要 mask 掉）的掩码张量，大小为 [B*R, N]
+        obj_texts_mask = torch.ones(B * R, N, device=device, dtype=torch.bool)
+
+        # # 获取每个批次中两个对象的索引
+        batch_indices = torch.arange(B * R, device=device)
+        obj_texts_mask[batch_indices, relation_obj_idx_reshaped[:, 0].long()] = False
+        obj_texts_mask[batch_indices, relation_obj_idx_reshaped[:, 1].long()] = False
+
+        # 5. 添加 cls token 对应的掩码列
+        # 创建一个 cls token 掩码列，全为 False（cls token 总是有效）
+        cls_mask = torch.zeros(B * R, 1, device=device, dtype=torch.bool)
+
+        # 将 cls token 掩码列与对象掩码拼接
+        # 最终的 key_padding_mask 形状为 [B*R, 1 + N]
+        final_key_padding_mask = torch.cat([cls_mask, obj_texts_mask], dim=1)
+
+        # 6. 使用注意力机制计算融合权重
+        query = text_features_reshaped.unsqueeze(1) # [B*R, 1, D]
+
+        attn_output, attn_weights = self.cross_attention(
+            query=query,           
+            key=visual_features_repeated,   
+            value=visual_features_repeated,  
+            key_padding_mask=final_key_padding_mask  
+        )
+
+        fused_features = attn_output.squeeze(1)
+
+        # 返回值可以重塑以保持与输入一致的维度
+        fused_features_reshaped = fused_features.view(B, R, -1)
+
+        return F.normalize(fused_features_reshaped, dim=-1) if normalize else fused_features_reshaped
 
     def encode_text(self, text, normalize: bool = False):
         cast_dtype = self.transformer.get_cast_dtype()
@@ -329,22 +424,35 @@ class CLIP(nn.Module):
             **kwargs: Any,
     ):
         out_dict = {"logit_scale": self.logit_scale.exp()}
+
+        # 编码 text
+        text_features = self.encode_text(text, normalize=True) if text is not None else None
+        out_dict['text_features'] = text_features
+
         # 是否添加 attn_mask
-        attn_mask = kwargs.get('attn_mask', None)
+       
         # 编码 image
+        attn_mask = kwargs.get('attn_mask', None)
         img_token_vm_layers = kwargs.get('img_token_vm_layers', None)
+
+
         if kwargs.get('use_obj_token', False):
-            image_features, obj_images_features = self.encode_image(image, attn_mask=attn_mask, use_obj_tokens=True, attn_mask_layers=img_token_vm_layers)
+            obj_texts_mask = kwargs.get('obj_texts_mask', None)
+            image_features, obj_images_features, ori_image_features, ori_obj_images_features = self.encode_image_with_text_attn(
+                image, 
+                attn_mask=attn_mask, 
+                use_obj_tokens=True, 
+                attn_mask_layers=img_token_vm_layers, 
+                normalize=True,
+                text_features=text_features, 
+                obj_texts_mask=obj_texts_mask
+            )
             out_dict['image_features'] = image_features
             out_dict['obj_images_features'] = obj_images_features
         else:
             image_features = self.encode_image(image, normalize=True, attn_mask_layers=img_token_vm_layers) if image is not None else None
             out_dict['image_features'] = image_features
 
-        # 编码 text
-        text_features = self.encode_text(text, normalize=True) if text is not None else None
-        out_dict['text_features'] = text_features
-        
         # 是否添加 object level 对比学习
         if 'obj_texts' in kwargs:
             obj_texts = kwargs['obj_texts']
@@ -355,14 +463,27 @@ class CLIP(nn.Module):
             obj_property_negatives = kwargs['property_negatives']
             obj_property_negatives_features = self.encode_multi_text(obj_property_negatives) if obj_property_negatives is not None else None
             out_dict['obj_property_negatives_features'] = obj_property_negatives_features
-        
+
         if 'relation_texts' in kwargs and 'relation_negatives' in kwargs:
             relation_texts = kwargs['relation_texts']
             relation_negatives = kwargs['relation_negatives']
+            relation_obj_idx=kwargs.get('relation_obj_idx', None)
+
+            # 编码 relation text
             relation_texts_features = self.encode_multi_text(relation_texts) if relation_texts is not None else None
             relation_negatives_features = self.encode_multi_text(relation_negatives) if relation_negatives is not None else None
+
+            # 编码 relation image（复用之前编码的 image 特征）
+            relation_image_features = self.encode_relation_image_with_text_attn(
+                features=ori_image_features,
+                obj_image_features=ori_obj_images_features,
+                text_features=relation_texts_features, 
+                relation_obj_idx=relation_obj_idx
+            )
+
             out_dict['relation_texts_features'] = relation_texts_features
             out_dict['relation_negatives_features'] = relation_negatives_features
+            out_dict['relation_images_features'] = relation_image_features
 
         if self.output_dict:
             out_dict = out_dict.copy()

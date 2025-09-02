@@ -710,9 +710,9 @@ class VisionTransformer(nn.Module):
 
         if use_obj_tokens:
             object_token_outputs = tokens[:,:self.obj_token_nums]
-            object_token_outputs = object_token_outputs @ self.proj # shape: [B, nums_obj_tokens, proj_dim]
-            new_pooled = x[:, 0:self.obj_token_nums+1].mean(dim=1) @ self.proj
-            return new_pooled, object_token_outputs
+            if self.proj is not None:
+                object_token_outputs = object_token_outputs @ self.proj # shape: [B, nums_obj_tokens, proj_dim]
+            return pooled, object_token_outputs
 
         if self.output_tokens:
             return pooled, tokens
